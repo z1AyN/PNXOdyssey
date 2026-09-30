@@ -1,0 +1,9 @@
+{
+  "Name": "PNX Odyssey",
+  "Author": "PNX",
+  "Punchline": "Live Odyssey Trials table for fates and gods.",
+  "Description": "Use /odyssey to open. Shares trial sessions, registration, threads, and god dice boards.",
+  "Tags": ["odyssey", "trials", "pnx"],
+  "IconUrl": "https://raw.githubusercontent.com/z1AyN/PNXOdyssey/main/src/PNX.Odyssey/images/icon.png",
+  "RepoUrl": "https://pnx.events/odyssey"
+}

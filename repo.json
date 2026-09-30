@@ -11,6 +11,7 @@
     "ApplicableVersion": "any",
     "DalamudApiLevel": 15,
     "Tags": ["odyssey", "trials", "pnx"],
+    "IconUrl": "https://raw.githubusercontent.com/z1AyN/PNXOdyssey/main/src/PNX.Odyssey/images/icon.png",
     "IsHide": false,
     "IsTestingExclusive": false,
     "DownloadCount": 0,

@@ -1,0 +1,10 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/PNX.Odyssey.Core/PNX.Odyssey.Core.csproj" />
+    <Project Path="src/PNX.Odyssey.Server/PNX.Odyssey.Server.csproj" />
+    <Project Path="src/PNX.Odyssey/PNX.Odyssey.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/PNX.Odyssey.Core.Tests/PNX.Odyssey.Core.Tests.csproj" />
+  </Folder>
+</Solution>
