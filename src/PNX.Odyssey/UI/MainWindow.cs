@@ -12,8 +12,10 @@ internal sealed class MainWindow : Window
     private readonly RegisterForm _register = new();
     private readonly ThreadsForm _threads = new();
     private readonly GodForm _god = new();
+    private readonly AspectsForm _aspects = new();
+    private readonly MacrosForm _macros = new();
 
-    public MainWindow(Plugin plugin) : base("PNX Odyssey##main")
+    public MainWindow(Plugin plugin) : base("PNX Odyssey##main", ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoScrollWithMouse)
     {
         _plugin = plugin;
         Size = new Vector2(980, 640);
@@ -31,10 +33,14 @@ internal sealed class MainWindow : Window
 
     public override void Draw()
     {
-        float footer = ImGui.GetFrameHeight() + 12f;
+        float footer = ImGui.GetFrameHeight() + ImGui.GetStyle().ItemSpacing.Y + 20f;
         float height = Math.Max(80f, ImGui.GetContentRegionAvail().Y - footer);
         ImGui.PushStyleColor(ImGuiCol.ChildBg, new Vector4(0f, 0f, 0f, 0f));
-        bool body = ImGui.BeginChild("main-body", new Vector2(0, height));
+        bool body = ImGui.BeginChild(
+            "main-body",
+            new Vector2(0, height),
+            false,
+            ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoScrollWithMouse);
         ImGui.PopStyleColor();
         if (body)
         {
@@ -70,22 +76,22 @@ internal sealed class MainWindow : Window
         StaffRole role = SessionChrome.RoleOf(_plugin.Client, snapshot);
         if (role == StaffRole.None)
         {
-            Ui.Hint("Pick a seat. Fate registers players. A god runs their own trial.");
+            Ui.Hint("Pick a seat. Fate and the Director run the table. A god runs their own trial.");
             SessionChrome.Members(snapshot);
             return null;
         }
 
-        if (role == StaffRole.Fate)
+        if (role is StaffRole.Fate or StaffRole.Director)
         {
             SessionChrome.Strip(snapshot);
-            return DrawFateTabs();
+            return DrawHostTabs(role);
         }
 
         SessionChrome.Strip(snapshot);
         return DrawGodTabs(snapshot, role);
     }
 
-    private string? DrawFateTabs()
+    private string? DrawHostTabs(StaffRole role)
     {
         string? scope = null;
         if (!ImGui.BeginTabBar("fate"))
@@ -112,6 +118,12 @@ internal sealed class MainWindow : Window
         if (ImGui.BeginTabItem("Aspects"))
         {
             scope = DrawAspects();
+            ImGui.EndTabItem();
+        }
+
+        if (role == StaffRole.Director && ImGui.BeginTabItem("Macros"))
+        {
+            _macros.Draw(_plugin);
             ImGui.EndTabItem();
         }
 
@@ -147,10 +159,9 @@ internal sealed class MainWindow : Window
         return null;
     }
 
-    private static string? DrawAspects()
+    private string? DrawAspects()
     {
-        Ui.Section("Aspects");
-        ImGui.TextWrapped("Claims will be listed here later. Aspect prizes from the Odyssey site are not loaded in this version.");
+        _aspects.Draw(_plugin, _plugin.Client.Snapshot!);
         return null;
     }
 }

@@ -28,4 +28,8 @@ public sealed class ArchivedSession
     public List<TrialBoard> Boards { get; set; } = [];
 
     public List<LobbyLine> Log { get; set; } = [];
+
+    public List<AspectClaim> Claims { get; set; } = [];
+
+    public List<GodMacro> Macros { get; set; } = [];
 }

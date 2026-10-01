@@ -257,6 +257,17 @@ public class SessionHostTests
     }
 
     [Fact]
+    public void The_director_can_run_the_table()
+    {
+        (SessionHost host, _, Participant mortal) = SeatedMortal();
+        CharacterIdentity fate = Person("Furia Bloom");
+        SetRole(host, fate, StaffRole.Director);
+        HostResult threads = SetThreads(host, fate, mortal.Id, 3, mortal.Revision);
+        Assert.True(threads.Ok, threads.Reason);
+        Assert.Equal(3, threads.Snapshot!.Participant(mortal.Id)!.Threads);
+    }
+
+    [Fact]
     public void Protocol_roles_round_trip_as_camel_case()
     {
         string json = JsonSerializer.Serialize(new ProtocolMessage
@@ -291,6 +302,91 @@ public class SessionHostTests
         }, Now);
         Assert.True(removed.Ok);
         Assert.Null(removed.Snapshot!.Participant(mortal.Id));
+    }
+
+    [Fact]
+    public void Aspect_claims_share_a_pool_and_survive_a_restart()
+    {
+        Assert.Equal(35, AspectCatalog.All.Count);
+        (SessionHost host, _, Participant mortal) = SeatedMortal();
+        CharacterIdentity fate = Person("Furia Bloom");
+        SetRole(host, fate, StaffRole.Ares);
+        HostResult asGod = host.Dispatch(fate, new ProtocolMessage
+        {
+            Type = MessageType.AspectClaim,
+            OfferingId = "cassian-rp",
+            ParticipantId = mortal.Id,
+        }, Now);
+        Assert.False(asGod.Ok);
+
+        SetRole(host, fate, StaffRole.Fate);
+        HostResult claimed = host.Dispatch(fate, new ProtocolMessage
+        {
+            Type = MessageType.AspectClaim,
+            OfferingId = "cassian-rp",
+            ParticipantId = mortal.Id,
+        }, Now);
+        Assert.True(claimed.Ok, claimed.Reason);
+        AspectClaim claim = Assert.Single(claimed.Snapshot!.Claims);
+        Assert.Equal("Lulu Pillow", claim.PlayerName);
+        Assert.Equal(1, claim.Run);
+        Assert.Contains(claimed.Snapshot.Log, line => line.Kind == LobbyKind.Claim && line.Text.Contains("Lulu Pillow claimed the Aspect of Cassian Hyskaris", StringComparison.Ordinal));
+        Assert.Equal(
+            "Shared pool: 0 rainbow claims",
+            AspectCatalog.ClaimsText(AspectCatalog.Find("cassian-makeup")!, claimed.Snapshot.Claims));
+
+        HostResult blocked = host.Dispatch(fate, new ProtocolMessage
+        {
+            Type = MessageType.AspectClaim,
+            OfferingId = "cassian-makeup",
+            ParticipantId = mortal.Id,
+        }, Now);
+        Assert.False(blocked.Ok);
+
+        HostResult denied = host.Dispatch(fate, new ProtocolMessage
+        {
+            Type = MessageType.AspectRemove,
+            ClaimId = claim.Id,
+            Password = "nope",
+        }, Now);
+        Assert.False(denied.Ok);
+        Assert.Single(denied.Snapshot!.Claims);
+
+        var restored = new SessionHost();
+        restored.Restore(host.Capture());
+        HostResult greeted = restored.Dispatch(fate, new ProtocolMessage { Type = MessageType.Hello }, Now);
+        Assert.Single(greeted.Snapshot!.Claims);
+
+        HostResult removed = restored.Dispatch(fate, new ProtocolMessage
+        {
+            Type = MessageType.AspectRemove,
+            ClaimId = claim.Id,
+            Password = "secret",
+        }, Now);
+        Assert.True(removed.Ok, removed.Reason);
+        Assert.Empty(removed.Snapshot!.Claims);
+
+        HostResult once = restored.Dispatch(fate, new ProtocolMessage
+        {
+            Type = MessageType.AspectClaim,
+            OfferingId = "ash-voice",
+            ParticipantId = mortal.Id,
+        }, Now);
+        HostResult twice = restored.Dispatch(fate, new ProtocolMessage
+        {
+            Type = MessageType.AspectClaim,
+            OfferingId = "ash-voice",
+            ParticipantId = mortal.Id,
+        }, Now);
+        HostResult full = restored.Dispatch(fate, new ProtocolMessage
+        {
+            Type = MessageType.AspectClaim,
+            OfferingId = "ash-voice",
+            ParticipantId = mortal.Id,
+        }, Now);
+        Assert.True(once.Ok, once.Reason);
+        Assert.True(twice.Ok, twice.Reason);
+        Assert.False(full.Ok);
     }
 
     private static long Clear(SessionHost host, CharacterIdentity god, string participantId, long revision)

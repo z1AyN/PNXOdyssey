@@ -296,9 +296,14 @@ internal sealed class WebSocketConnection : IOdysseyConnection
         or MessageType.ParticipantRemove
         or MessageType.ParticipantLevel
         or MessageType.ParticipantComplete
+        or MessageType.ParticipantEdit
         or MessageType.ThreadsSet
         or MessageType.TrialDice
         or MessageType.TrialFail
         or MessageType.TrialPass
-        or MessageType.LobbyChat;
+        or MessageType.LobbyChat
+        or MessageType.AspectClaim
+        or MessageType.AspectRemove
+        or MessageType.GodMacroSave
+        or MessageType.GodMacroRemove;
 }

@@ -16,7 +16,7 @@ internal sealed class TrialWatcher
 
     public void OnChat(IChatMessage message, OdysseyClient client, CharacterIdentity? self)
     {
-        if (self == null || !IsPartyChannel(message.LogKind) || !TryReadRoll(message.Message, out int roll, out string named))
+        if (self == null || !IsPartyChannel(message.LogKind) || !TryReadRoll(message.Message, out int roll, out int sides, out string named))
             return;
 
         SessionSnapshot? snapshot = client.Snapshot;
@@ -37,7 +37,7 @@ internal sealed class TrialWatcher
         string sender = FirstName(named, message.Sender.TextValue);
         if (NamesMatch(sender, participant.FullName) || message.Sender.TextValue.Contains(participant.FullName, StringComparison.OrdinalIgnoreCase))
         {
-            if (roll is >= 1 and <= TrialRules.MortalSides)
+            if (sides == TrialRules.MortalSides && roll >= 1 && roll <= sides)
                 client.ReportDie(participant.Id, "player", roll);
             return;
         }
@@ -46,7 +46,7 @@ internal sealed class TrialWatcher
         bool own = NamesMatch(sender, self.Name)
             || message.Sender.TextValue.Contains(self.Name, StringComparison.OrdinalIgnoreCase)
             || (sender.Length == 0 && client.ExpectedOwnDice > 0);
-        if (!own || roll < 1 || roll > godSides)
+        if (!own || sides != godSides || roll < 1 || roll > sides)
             return;
 
         if (sender.Length == 0)
@@ -152,9 +152,10 @@ internal sealed class TrialWatcher
         client.UpdateLevel(participant.Id, presence.Value.Level);
     }
 
-    private static bool TryReadRoll(SeString message, out int roll, out string name)
+    private static bool TryReadRoll(SeString message, out int roll, out int sides, out string name)
     {
         roll = 0;
+        sides = 0;
         name = "";
         bool sawIcon = false;
         var afterIcon = new StringBuilder();
@@ -174,12 +175,7 @@ internal sealed class TrialWatcher
         }
 
         string source = afterIcon.Length > 0 ? afterIcon.ToString() : message.TextValue;
-        int? value = DiceText.ReadRoll(source);
-        if (value is not > 0)
-            return false;
-
-        roll = value.Value;
-        return true;
+        return DiceText.TryRead(source, out roll, out sides);
     }
 
     private static bool IsDiceIcon(Payload payload)

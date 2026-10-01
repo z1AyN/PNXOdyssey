@@ -26,6 +26,8 @@ public sealed class Plugin : IDalamudPlugin
     private readonly INotificationManager _notifications;
     private readonly WindowSystem _windows = new("PNXOdyssey");
     private readonly TrialWatcher _watcher = new();
+    private readonly LibraryWindow _library;
+    private readonly SymbolWindow _symbols;
     private readonly MainWindow _main;
     private readonly ConfigWindow _configWindow;
     private readonly ChatWindow _chatWindow;
@@ -58,6 +60,8 @@ public sealed class Plugin : IDalamudPlugin
 
         Config = pluginInterface.GetPluginConfig() as Configuration ?? new Configuration();
         Config.Initialize(pluginInterface);
+        _library = new LibraryWindow(this);
+        _symbols = new SymbolWindow();
         Client = new OdysseyClient(log, Config);
         Client.Configure(Configuration.ServerAddress, Configuration.PluginKeyValue);
         Ui.LoadNameFont(pluginInterface.UiBuilder.FontAtlas);
@@ -70,6 +74,8 @@ public sealed class Plugin : IDalamudPlugin
         _windows.AddWindow(_configWindow);
         _windows.AddWindow(_chatWindow);
         _windows.AddWindow(new MarkerOverlay(this));
+        _windows.AddWindow(_library);
+        _windows.AddWindow(_symbols);
 
         pluginInterface.UiBuilder.Draw += _windows.Draw;
         pluginInterface.UiBuilder.OpenMainUi += OpenMain;
@@ -85,6 +91,23 @@ public sealed class Plugin : IDalamudPlugin
     public Configuration Config { get; }
 
     internal OdysseyClient Client { get; }
+
+    internal void OpenLibrary() => _library.IsOpen = true;
+
+    internal void OpenSymbols(Action<string> apply)
+    {
+        _symbols.Apply = apply;
+        _symbols.IsOpen = true;
+    }
+
+    internal void SetPrefix(string macroId, string symbol)
+    {
+        ShoutMacro? macro = Config.Macros.FirstOrDefault(item => item.Id == macroId);
+        if (macro == null)
+            return;
+        macro.Prefix = symbol;
+        Config.Save();
+    }
 
     public void OpenMain() => _main.IsOpen = true;
 
@@ -235,6 +258,7 @@ public sealed class Plugin : IDalamudPlugin
         }
 
         Client.Tick(DateTime.UtcNow);
+        MacrosForm.PushDue(this);
         if (!_main.IsOpen)
             Client.WatchedParticipantId = null;
 

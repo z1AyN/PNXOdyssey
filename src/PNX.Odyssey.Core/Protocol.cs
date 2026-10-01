@@ -23,6 +23,7 @@ public static class MessageType
     public const string ParticipantRemove = "participant.remove";
     public const string ParticipantLevel = "participant.level";
     public const string ParticipantComplete = "participant.complete";
+    public const string ParticipantEdit = "participant.edit";
     public const string ThreadsSet = "threads.set";
     public const string EditBegin = "edit.begin";
     public const string EditEnd = "edit.end";
@@ -30,6 +31,10 @@ public static class MessageType
     public const string TrialFail = "trial.fail";
     public const string TrialPass = "trial.pass";
     public const string LobbyChat = "lobby.chat";
+    public const string AspectClaim = "aspect.claim";
+    public const string AspectRemove = "aspect.remove";
+    public const string GodMacroSave = "god.macro";
+    public const string GodMacroRemove = "god.macro.remove";
     public const string Welcome = "welcome";
     public const string State = "state";
     public const string Sessions = "sessions";
@@ -54,6 +59,14 @@ public sealed class ProtocolMessage
 
     public StaffRole? Role { get; set; }
 
+    public StaffRole? Strength { get; set; }
+
+    public StaffRole? Harmony { get; set; }
+
+    public StaffRole? Fear { get; set; }
+
+    public StaffRole? Power { get; set; }
+
     public string? ParticipantId { get; set; }
 
     public string? FirstName { get; set; }
@@ -75,6 +88,12 @@ public sealed class ProtocolMessage
     public List<int>? Values { get; set; }
 
     public string? Text { get; set; }
+
+    public string? OfferingId { get; set; }
+
+    public string? ClaimId { get; set; }
+
+    public string? MacroId { get; set; }
 
     public string? Reason { get; set; }
 

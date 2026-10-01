@@ -164,6 +164,10 @@ public sealed class SessionSnapshot
 
     public List<LobbyLine> Log { get; set; } = [];
 
+    public List<AspectClaim> Claims { get; set; } = [];
+
+    public List<GodMacro> Macros { get; set; } = [];
+
     public SessionMember? Member(string selfId) =>
         Members.FirstOrDefault(member => string.Equals(member.Id, selfId, StringComparison.OrdinalIgnoreCase));
 
@@ -188,5 +192,7 @@ public sealed class SessionSnapshot
         Locks = Locks.Select(edit => edit.Clone()).ToList(),
         Boards = Boards.Select(board => board.Clone()).ToList(),
         Log = Log.Select(line => line.Clone()).ToList(),
+        Claims = Claims.Select(claim => claim.Clone()).ToList(),
+        Macros = Macros.Select(macro => macro.Clone()).ToList(),
     };
 }

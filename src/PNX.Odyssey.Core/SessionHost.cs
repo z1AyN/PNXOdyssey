@@ -50,6 +50,7 @@ public sealed class SessionHost
             MessageType.ParticipantRemove => Remove(client, message),
             MessageType.ParticipantLevel => UpdateLevel(client, message),
             MessageType.ParticipantComplete => Complete(client, message),
+            MessageType.ParticipantEdit => EditParticipant(client, message),
             MessageType.ThreadsSet => SetThreads(client, message),
             MessageType.EditBegin => BeginEdit(client, message, utcNow),
             MessageType.EditEnd => EndEdit(client, message),
@@ -57,6 +58,10 @@ public sealed class SessionHost
             MessageType.TrialFail => Fail(client, message),
             MessageType.TrialPass => Pass(client, message),
             MessageType.LobbyChat => Chat(client, message, utcNow),
+            MessageType.AspectClaim => ClaimAspect(client, message, utcNow),
+            MessageType.AspectRemove => RemoveAspect(client, message),
+            MessageType.GodMacroSave => SaveGodMacro(client, message),
+            MessageType.GodMacroRemove => RemoveGodMacro(client, message),
             _ => Reject(client, "Unknown message."),
         };
     }
@@ -95,6 +100,8 @@ public sealed class SessionHost
             Locks = session.Locks.Values.Select(edit => edit.Clone()).ToList(),
             Boards = session.Boards.Values.Select(board => board.Clone()).ToList(),
             Log = session.Log.Select(line => line.Clone()).ToList(),
+            Claims = session.Claims.Select(claim => claim.Clone()).ToList(),
+            Macros = session.Macros.Select(macro => macro.Clone()).ToList(),
         }).ToList(),
     };
 
@@ -128,6 +135,10 @@ public sealed class SessionHost
             foreach (TrialBoard board in saved.Boards)
                 session.Boards[board.ParticipantId] = board.Clone();
             session.Log.AddRange(saved.Log.Select(line => line.Clone()));
+            foreach (AspectClaim claim in saved.Claims ?? [])
+                session.Claims.Add(claim.Clone());
+            foreach (GodMacro macro in saved.Macros ?? [])
+                session.Macros.Add(macro.Clone());
             _sessions[session.Id] = session;
         }
     }
@@ -364,6 +375,78 @@ public sealed class SessionHost
         return Ok(client);
     }
 
+    private HostResult EditParticipant(ClientSlot client, ProtocolMessage message)
+    {
+        if (!RequireFate(client, out LiveSession? session, out SessionMember? member, out HostResult? failure))
+            return failure!;
+        if (!TryParticipant(client, message.ParticipantId, out Participant? participant, out failure))
+            return failure!;
+        if (!RevisionMatches(participant, message.Revision))
+            return Stale(client, participant);
+
+        string first = Clean(message.FirstName, 32);
+        string last = Clean(message.LastName, 32);
+        string world = Clean(message.World, 32);
+        if (first.Length == 0 || last.Length == 0 || world.Length == 0)
+            return Reject(client, "First name, last name, and world are required.");
+        if (message.Threads == null)
+            return Reject(client, "A thread count is required.");
+
+        int threads = message.Threads.Value;
+        if (threads < 0 || threads > TrialRules.MaxThreads)
+            return Reject(client, "Threads must stay between 0 and 10.");
+
+        if (!ValidVictor(message.Strength, TrialAspect.Strength)
+            || !ValidVictor(message.Harmony, TrialAspect.Harmony)
+            || !ValidVictor(message.Fear, TrialAspect.Fear)
+            || !ValidVictor(message.Power, TrialAspect.Power))
+            return Reject(client, "That seat does not run this trial.");
+
+        string oldId = participant.Id;
+        string newId = ParticipantIds.Create(first, last, world);
+        if (!string.Equals(oldId, newId, StringComparison.Ordinal) && session!.Participants.ContainsKey(newId))
+            return Reject(client, "Already registered.");
+
+        participant.FirstName = first;
+        participant.LastName = last;
+        participant.World = world;
+        participant.Threads = threads;
+        participant.Strength = EmptyVictor(message.Strength);
+        participant.Harmony = EmptyVictor(message.Harmony);
+        participant.Fear = EmptyVictor(message.Fear);
+        participant.Power = EmptyVictor(message.Power);
+        participant.Revision++;
+        participant.LastEditor = member!.Name;
+        if (!string.Equals(oldId, newId, StringComparison.Ordinal))
+        {
+            session!.Participants.Remove(oldId);
+            participant.Id = newId;
+            session.Participants[newId] = participant;
+            if (session.Boards.Remove(oldId, out TrialBoard? board))
+            {
+                board.ParticipantId = newId;
+                session.Boards[newId] = board;
+            }
+
+            foreach (AspectClaim claim in session.Claims)
+            {
+                if (!string.Equals(claim.ParticipantId, oldId, StringComparison.OrdinalIgnoreCase))
+                    continue;
+                claim.ParticipantId = newId;
+                claim.PlayerName = participant.FullName;
+            }
+        }
+
+        session!.LastEditor = member.Name;
+        session.Revision++;
+        return Ok(client);
+    }
+
+    private static bool ValidVictor(StaffRole? role, TrialAspect aspect) =>
+        role is null or StaffRole.None || StaffText.AspectOf(role.Value) == aspect;
+
+    private static StaffRole? EmptyVictor(StaffRole? role) => role is null or StaffRole.None ? null : role;
+
     private HostResult BeginEdit(ClientSlot client, ProtocolMessage message, DateTime utcNow)
     {
         if (client.Session == null || client.Member == null)
@@ -547,6 +630,104 @@ public sealed class SessionHost
 
         Note(client.Session, client.Member, LobbyKind.Chat, text, utcNow);
         client.Session.Revision++;
+        return Ok(client);
+    }
+
+    private HostResult ClaimAspect(ClientSlot client, ProtocolMessage message, DateTime utcNow)
+    {
+        if (!RequireFate(client, out LiveSession? session, out SessionMember? member, out HostResult? failure))
+            return failure!;
+        if (!TryParticipant(client, message.ParticipantId, out Participant? participant, out failure))
+            return failure!;
+
+        AspectCatalog.Offering? offering = AspectCatalog.Find(message.OfferingId);
+        if (offering == null)
+            return Reject(client, "That aspect is not in the list.");
+        if (!AspectCatalog.HasRoom(offering, session!.Claims))
+            return Reject(client, "No claims left for that aspect.");
+
+        var claim = new AspectClaim
+        {
+            Id = Guid.NewGuid().ToString("N"),
+            OfferingId = offering.Id,
+            ParticipantId = participant!.Id,
+            PlayerName = participant.FullName,
+            Run = Math.Max(participant.Level, 1),
+            At = utcNow,
+        };
+        session.Claims.Add(claim);
+        session.Revision++;
+        Note(session, member!, LobbyKind.Claim, AspectCatalog.ClaimLog(claim), utcNow);
+        return Ok(client);
+    }
+
+    private HostResult RemoveAspect(ClientSlot client, ProtocolMessage message)
+    {
+        if (!RequireFate(client, out LiveSession? session, out _, out HostResult? failure))
+            return failure!;
+        if (string.IsNullOrEmpty(message.Password) || !PasswordMatches(session!.PasswordHash, message.Password))
+            return Reject(client, "The session password does not match.");
+
+        AspectClaim? claim = session.Claims.FirstOrDefault(item => item.Id == message.ClaimId);
+        if (claim == null)
+            return Reject(client, "That claim is already gone.");
+
+        session.Claims.Remove(claim);
+        session.Revision++;
+        return Ok(client);
+    }
+
+    private HostResult SaveGodMacro(ClientSlot client, ProtocolMessage message)
+    {
+        if (!RequireGod(client, out LiveSession? session, out SessionMember? member, out _, out HostResult? failure))
+            return failure!;
+
+        string name = Clean(message.Name, 40);
+        string text = message.Text?.Replace('\r', '\n').Trim() ?? "";
+        if (name.Length == 0 || text.Length == 0)
+            return Reject(client, "Name the macro and write its lines.");
+        if (text.Length > 900)
+            return Reject(client, "That macro is too long.");
+
+        if (string.IsNullOrWhiteSpace(message.MacroId))
+        {
+            session!.Macros.Add(new GodMacro
+            {
+                Id = Guid.NewGuid().ToString("N"),
+                Name = name,
+                Text = text,
+                AuthorId = member!.Id,
+                AuthorName = member.Name,
+            });
+        }
+        else
+        {
+            GodMacro? existing = session!.Macros.FirstOrDefault(macro => macro.Id == message.MacroId);
+            if (existing == null)
+                return Reject(client, "That macro is already gone.");
+            if (!string.Equals(existing.AuthorId, member!.Id, StringComparison.OrdinalIgnoreCase))
+                return Reject(client, "Only the person who wrote that macro can change it.");
+            existing.Name = name;
+            existing.Text = text;
+        }
+
+        session.Revision++;
+        return Ok(client);
+    }
+
+    private HostResult RemoveGodMacro(ClientSlot client, ProtocolMessage message)
+    {
+        if (!RequireGod(client, out LiveSession? session, out SessionMember? member, out _, out HostResult? failure))
+            return failure!;
+
+        GodMacro? existing = session!.Macros.FirstOrDefault(macro => macro.Id == message.MacroId);
+        if (existing == null)
+            return Reject(client, "That macro is already gone.");
+        if (!string.Equals(existing.AuthorId, member!.Id, StringComparison.OrdinalIgnoreCase))
+            return Reject(client, "Only the person who wrote that macro can delete it.");
+
+        session.Macros.Remove(existing);
+        session.Revision++;
         return Ok(client);
     }
 
@@ -738,9 +919,9 @@ public sealed class SessionHost
     {
         if (!RequireStaff(client, out session, out member, out failure))
             return false;
-        if (member!.Role != StaffRole.Fate)
+        if (!StaffText.RunsTable(member!.Role))
         {
-            failure = Reject(client, "Only a Fate can do that.");
+            failure = Reject(client, "Only Fate or the Director can do that.");
             return false;
         }
 
@@ -849,6 +1030,14 @@ public sealed class SessionHost
             Locks = session.Locks.Values.Select(edit => edit.Clone()).ToList(),
             Boards = session.Boards.Values.Select(board => board.Clone()).ToList(),
             Log = session.Log.Select(line => line.Clone()).ToList(),
+            Claims = session.Claims
+                .OrderBy(claim => claim.At)
+                .Select(claim => claim.Clone())
+                .ToList(),
+            Macros = session.Macros
+                .OrderBy(macro => macro.Name, StringComparer.OrdinalIgnoreCase)
+                .Select(macro => macro.Clone())
+                .ToList(),
         };
     }
 
@@ -931,5 +1120,9 @@ public sealed class SessionHost
         public Dictionary<string, TrialBoard> Boards { get; } = new(StringComparer.OrdinalIgnoreCase);
 
         public List<LobbyLine> Log { get; } = [];
+
+        public List<AspectClaim> Claims { get; } = [];
+
+        public List<GodMacro> Macros { get; } = [];
     }
 }

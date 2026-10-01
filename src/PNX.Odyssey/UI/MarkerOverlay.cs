@@ -8,6 +8,8 @@ namespace Pnx.Odyssey.UI;
 internal sealed class MarkerOverlay : Window
 {
     private readonly Plugin _plugin;
+    private readonly Dictionary<string, double> _shownAt = new(StringComparer.OrdinalIgnoreCase);
+    private string _lastTarget = "\0";
 
     public MarkerOverlay(Plugin plugin) : base("PNX Odyssey Mark##mark",
         ImGuiWindowFlags.NoDecoration
@@ -37,7 +39,7 @@ internal sealed class MarkerOverlay : Window
     public override void Draw()
     {
         Vector2 origin = ImGui.GetMainViewport().Pos;
-        ImDrawListPtr draw = ImGui.GetForegroundDrawList();
+        ImDrawListPtr draw = ImGui.GetBackgroundDrawList();
         Vector3? from = _plugin.LocalChest();
         if (from != null)
         {
@@ -46,14 +48,80 @@ internal sealed class MarkerOverlay : Window
         }
 
         Vector2 view = ImGui.GetMainViewport().Size;
+        NoteTarget();
+        var visible = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach ((Participant player, Vector3 head) in _plugin.NearbyRegistered())
         {
+            visible.Add(player.Id);
+            float fade = LabelOpacity(player);
+            if (fade <= 0.01f)
+                continue;
             if (!_plugin.Project(head, out Vector2 screen))
                 continue;
             if (screen.X < 0 || screen.Y < 0 || screen.X > view.X || screen.Y > view.Y)
                 continue;
-            DrawProgress(draw, screen + origin, player);
+            DrawProgress(draw, screen + origin, player, fade);
         }
+
+        List<string> gone = _shownAt.Keys.Where(id => !visible.Contains(id)).ToList();
+        foreach (string id in gone)
+            _shownAt.Remove(id);
+    }
+
+    private void NoteTarget()
+    {
+        if (!_plugin.Config.OverlayFade)
+        {
+            _lastTarget = "\0";
+            return;
+        }
+
+        string target = TargetedId() ?? "";
+        if (string.Equals(target, _lastTarget, StringComparison.OrdinalIgnoreCase))
+            return;
+
+        _lastTarget = target;
+        if (target.Length > 0)
+            _shownAt[target] = ImGui.GetTime();
+    }
+
+    private float LabelOpacity(Participant player)
+    {
+        Configuration config = _plugin.Config;
+        double now = ImGui.GetTime();
+        string? targetedId = TargetedId();
+        bool aimed = targetedId != null && string.Equals(targetedId, player.Id, StringComparison.OrdinalIgnoreCase);
+        if (config.OverlayFade && aimed && _shownAt.TryGetValue(player.Id, out double aimedAt))
+            return AgeFade(now, aimedAt, config.OverlayFadeSeconds);
+
+        if (!config.OverlayEnabled)
+            return 0f;
+        if (!config.OverlayFade)
+            return 1f;
+        if (!_shownAt.TryGetValue(player.Id, out double started))
+        {
+            started = now;
+            _shownAt[player.Id] = started;
+        }
+
+        return AgeFade(now, started, config.OverlayFadeSeconds);
+    }
+
+    private string? TargetedId()
+    {
+        SessionSnapshot? snapshot = _plugin.Client.Snapshot;
+        if (snapshot == null || !_plugin.TryTarget(out PartyPresence presence))
+            return null;
+        return PartyMatcher.Find(snapshot, presence.Name, presence.World)?.Id;
+    }
+
+    private static float AgeFade(double now, double started, float hold)
+    {
+        float age = (float)(now - started);
+        if (age <= hold)
+            return 1f;
+        float fade = (age - hold) / 0.8f;
+        return fade >= 1f ? 0f : 1f - fade;
     }
 
     private void DrawLine(ImDrawListPtr draw, Vector2 origin, Vector3 from, Vector3 to)
@@ -96,10 +164,10 @@ internal sealed class MarkerOverlay : Window
         Bolt,
     }
 
-    private void DrawProgress(ImDrawListPtr draw, Vector2 anchor, Participant player)
+    private void DrawProgress(ImDrawListPtr draw, Vector2 anchor, Participant player, float fade)
     {
         float scale = Math.Clamp(_plugin.Config.OverlayScale, 0.6f, 2.2f);
-        float opacity = Math.Clamp(_plugin.Config.OverlayOpacity, 0.15f, 1f);
+        float opacity = Math.Clamp(_plugin.Config.OverlayOpacity, 0.15f, 1f) * fade;
         float icon = 16f * scale;
         float gap = 6f * scale;
         float pad = 6f * scale;

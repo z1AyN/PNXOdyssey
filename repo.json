@@ -5,7 +5,7 @@
     "Punchline": "Live Odyssey Trials table for fates and gods.",
     "Description": "Use /odyssey to open. Shares trial sessions, registration, threads, and god dice boards.",
     "InternalName": "PNXOdyssey",
-    "AssemblyVersion": "0.1.1.0",
+    "AssemblyVersion": "0.2.0.0",
     "TestingAssemblyVersion": null,
     "RepoUrl": "https://github.com/z1AyN/PNXOdyssey",
     "ApplicableVersion": "any",
@@ -15,9 +15,9 @@
     "IsHide": false,
     "IsTestingExclusive": false,
     "DownloadCount": 0,
-    "LastUpdate": "1790792701",
-    "DownloadLinkInstall": "https://github.com/z1AyN/PNXOdyssey/releases/download/v0.1.1/latest.zip",
-    "DownloadLinkUpdate": "https://github.com/z1AyN/PNXOdyssey/releases/download/v0.1.1/latest.zip",
-    "DownloadLinkTesting": "https://github.com/z1AyN/PNXOdyssey/releases/download/v0.1.1/latest.zip"
+    "LastUpdate": "1790863510",
+    "DownloadLinkInstall": "https://github.com/z1AyN/PNXOdyssey/releases/download/v0.2.0/latest.zip",
+    "DownloadLinkUpdate": "https://github.com/z1AyN/PNXOdyssey/releases/download/v0.2.0/latest.zip",
+    "DownloadLinkTesting": "https://github.com/z1AyN/PNXOdyssey/releases/download/v0.2.0/latest.zip"
   }
 ]

@@ -41,10 +41,30 @@ public static class DiceGrouping
 
 public static partial class DiceText
 {
+    public static bool TryRead(string? text, out int roll, out int sides)
+    {
+        roll = 0;
+        sides = 0;
+        if (string.IsNullOrWhiteSpace(text))
+            return false;
+
+        Match match = OutOf().Match(text);
+        if (!match.Success)
+            return false;
+        if (!int.TryParse(match.Groups[1].Value, NumberStyles.None, CultureInfo.InvariantCulture, out roll))
+            return false;
+        if (!int.TryParse(match.Groups[2].Value, NumberStyles.None, CultureInfo.InvariantCulture, out sides))
+            return false;
+        return roll > 0 && sides > 0;
+    }
+
     public static int? ReadRoll(string? text)
     {
         if (string.IsNullOrWhiteSpace(text))
             return null;
+
+        if (TryRead(text, out int roll, out _))
+            return roll;
 
         Match resultBeforeRange = ResultBeforeRange().Match(text);
         if (resultBeforeRange.Success
@@ -69,4 +89,7 @@ public static partial class DiceText
 
     [GeneratedRegex(@"(\d+)\s*\(out of", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex ResultBeforeRange();
+
+    [GeneratedRegex(@"(\d+)\s*\(out of\s*(\d+)", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    private static partial Regex OutOf();
 }

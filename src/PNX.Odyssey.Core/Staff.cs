@@ -4,6 +4,7 @@ public enum StaffRole
 {
     None = 0,
     Fate,
+    Director,
     Ares,
     Athena,
     Hera,
@@ -26,6 +27,7 @@ public static class StaffText
     public static string Label(StaffRole role) => role switch
     {
         StaffRole.Fate => "Fate",
+        StaffRole.Director => "Director",
         StaffRole.Ares => "Ares",
         StaffRole.Athena => "Athena",
         StaffRole.Hera => "Hera",
@@ -37,6 +39,8 @@ public static class StaffText
     };
 
     public static bool IsGod(StaffRole role) => AspectOf(role) != null;
+
+    public static bool RunsTable(StaffRole role) => role is StaffRole.Fate or StaffRole.Director;
 
     public static TrialAspect? AspectOf(StaffRole role) => role switch
     {

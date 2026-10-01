@@ -13,28 +13,20 @@ internal enum GodTab
 
 internal sealed class GodForm
 {
-    private readonly RegisterForm _register = new();
     private string? _selectedId;
-    private bool _registering;
     private string? _macroNote;
     private float _progress;
-    private bool _autoTarget;
 
     public string? Draw(Plugin plugin, SessionSnapshot snapshot, StaffRole role, GodTab tab)
     {
         if (tab == GodTab.Players)
         {
-            if (ImGui.Button(_registering ? "Back to players" : "Register##open"))
-                _registering = !_registering;
-            if (_registering)
-                return _register.Draw(plugin);
-
             PlayersTable.Draw(plugin, snapshot, fate: false);
             return null;
         }
 
-        _registering = false;
         DrawQuickActions(plugin, snapshot);
+        DrawMacroBar(plugin, snapshot);
         if (_macroNote != null)
             ImGui.TextColored(Ui.Amber, _macroNote);
 
@@ -203,21 +195,8 @@ internal sealed class GodForm
         ImGui.SameLine();
         if (ImGui.Button("Game Start Macro"))
             _macroNote = ChatMacro.Run(plugin.Config.GameStartLines()) ? null : "Could not run the game start macro.";
-        ImGui.SameLine();
-        bool armed = _autoTarget;
-        if (armed)
-        {
-            ImGui.PushStyleColor(ImGuiCol.Button, new Vector4(0.36f, 0.28f, 0.55f, 1f));
-            ImGui.PushStyleColor(ImGuiCol.ButtonHovered, new Vector4(0.46f, 0.36f, 0.68f, 1f));
-            ImGui.PushStyleColor(ImGuiCol.ButtonActive, new Vector4(0.56f, 0.44f, 0.78f, 1f));
-        }
 
-        if (ImGui.Button("Auto Target"))
-            _autoTarget = !_autoTarget;
-        if (armed)
-            ImGui.PopStyleColor(3);
-
-        if (_autoTarget && plugin.TryTarget(out PartyPresence presence))
+        if (plugin.TryTarget(out PartyPresence presence))
         {
             Participant? match = PartyMatcher.Find(snapshot, presence.Name, presence.World);
             if (match != null)
@@ -241,6 +220,37 @@ internal sealed class GodForm
         }
 
         ImGui.EndCombo();
+    }
+
+    private void DrawMacroBar(Plugin plugin, SessionSnapshot snapshot)
+    {
+        ImGui.AlignTextToFramePadding();
+        ImGui.Text("Macros");
+        ImGui.SameLine();
+        foreach (string id in plugin.Config.GodHotbar.ToList())
+        {
+            GodMacro? macro = snapshot.Macros.FirstOrDefault(item => item.Id == id);
+            if (macro == null)
+                continue;
+            if (ImGui.Button($"{macro.Name}##hot{id}"))
+                RunShared(plugin, macro);
+            ImGui.SameLine();
+        }
+
+        float libraryWidth = ImGui.CalcTextSize("Shared Library").X + 24f;
+        float right = ImGui.GetCursorPosX() + ImGui.GetContentRegionAvail().X - libraryWidth;
+        if (right > ImGui.GetCursorPosX())
+            ImGui.SameLine(right);
+        if (ImGui.Button("Shared Library"))
+            plugin.OpenLibrary();
+    }
+
+    private void RunShared(Plugin plugin, GodMacro macro)
+    {
+        string[] lines = macro.Text
+            .Replace("\r", "", StringComparison.Ordinal)
+            .Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        _macroNote = ChatMacro.Run(lines) ? null : $"Could not run {macro.Name}.";
     }
 
     private void DrawStatus(Participant challenger)

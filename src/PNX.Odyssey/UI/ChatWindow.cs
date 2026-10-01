@@ -34,6 +34,10 @@ internal sealed class ChatWindow : Window
     private string _draft = "";
     private bool _heardReady;
     private int _heardChats;
+    private bool _seenLog;
+    private bool _wasFollowing;
+    private bool _keepTyping;
+    private string _logStamp = "";
 
     public ChatWindow(Plugin plugin) : base("PNX Odyssey Chat##chat")
     {
@@ -58,9 +62,9 @@ internal sealed class ChatWindow : Window
         float input = (ImGui.GetFrameHeightWithSpacing() * 1.15f) + ImGui.GetFrameHeightWithSpacing();
         ImGui.BeginChild("lobby-log", new Vector2(0, -input));
         int pixels = Math.Clamp(_plugin.Config.ChatTextSize, 12, 24);
+        IReadOnlyList<LobbyLine> lines = _plugin.Client.Lines;
         using (Ui.PushPixels(pixels, false))
         {
-            IReadOnlyList<LobbyLine> lines = _plugin.Client.Lines;
             float timeSlot = ImGui.CalcTextSize("[00:00:00]").X + 10f;
             int chats = 0;
             foreach (LobbyLine line in lines)
@@ -85,6 +89,16 @@ internal sealed class ChatWindow : Window
                 Ui.Hint("Nothing in the lobby yet.");
         }
 
+        string stamp = lines.Count == 0 ? "" : $"{lines[^1].At.Ticks}\u001f{lines[^1].Kind}\u001f{lines[^1].Text}";
+        bool follow = _plugin.Config.ChatFollow;
+        bool arrived = follow && _seenLog && stamp != _logStamp;
+        bool opened = follow && !_seenLog;
+        bool resumed = follow && !_wasFollowing;
+        if (opened || arrived || resumed)
+            ImGui.SetScrollHereY(1f);
+        _seenLog = true;
+        _logStamp = stamp;
+        _wasFollowing = follow;
         ImGui.EndChild();
 
         int sound = Math.Clamp(_plugin.Config.ChatSound, 1, Sounds.Length);
@@ -111,16 +125,27 @@ internal sealed class ChatWindow : Window
             _plugin.Config.Save();
         }
 
+        ImGui.SameLine();
+        if (ImGui.Checkbox("Follow at bottom", ref follow))
+        {
+            _plugin.Config.ChatFollow = follow;
+            _plugin.Config.Save();
+        }
+
         Vector2 pad = ImGui.GetStyle().FramePadding;
         ImGui.PushStyleVar(ImGuiStyleVar.FramePadding, pad + new Vector2(0f, ImGui.GetFrameHeight() * 0.075f));
         ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X - 78);
+        if (_keepTyping)
+            ImGui.SetKeyboardFocusHere();
         bool send = ImGui.InputText("##say", ref _draft, 240, ImGuiInputTextFlags.EnterReturnsTrue);
         ImGui.SameLine();
         send |= ImGui.Button("Send");
         ImGui.PopStyleVar();
+        _keepTyping = false;
         if (!send)
             return;
 
+        _keepTyping = true;
         string text = _draft.Trim();
         if (text.Length == 0)
             return;
@@ -173,7 +198,7 @@ internal sealed class ChatWindow : Window
     {
         Vector4 color = kind switch
         {
-            LobbyKind.Pass or LobbyKind.Register or LobbyKind.Join => Ui.Good,
+            LobbyKind.Pass or LobbyKind.Register or LobbyKind.Join or LobbyKind.Claim => Ui.Good,
             LobbyKind.Fail or LobbyKind.Remove or LobbyKind.Leave => Ui.Danger,
             LobbyKind.Threads => new Vector4(0.90f, 0.82f, 0.58f, 1f),
             LobbyKind.Run or LobbyKind.Role => Ui.Purple,
@@ -193,6 +218,7 @@ internal sealed class ChatWindow : Window
                 Ui.RunMark(size);
                 return;
             case LobbyKind.Pass:
+            case LobbyKind.Claim:
                 draw.AddCircleFilled(center, 6f, ink);
                 break;
             case LobbyKind.Fail:

@@ -67,6 +67,23 @@ internal sealed class ConfigWindow : Window
         if (ImGui.SliderFloat("##opacity", ref opacity, 0.15f, 1f, "%.2f"))
             _plugin.Config.OverlayOpacity = opacity;
         edited |= ImGui.IsItemDeactivatedAfterEdit();
+        bool shown = _plugin.Config.OverlayEnabled;
+        if (ImGui.Checkbox("Show head overlay", ref shown))
+            _plugin.Config.OverlayEnabled = shown;
+        edited |= ImGui.IsItemDeactivatedAfterEdit();
+        bool fade = _plugin.Config.OverlayFade;
+        if (ImGui.Checkbox("Fade overlay", ref fade))
+            _plugin.Config.OverlayFade = fade;
+        edited |= ImGui.IsItemDeactivatedAfterEdit();
+        float fadeSeconds = _plugin.Config.OverlayFadeSeconds;
+        ImGui.BeginDisabled(!fade);
+        Label("Fade after");
+        ImGui.SetNextItemWidth(-1);
+        if (ImGui.SliderFloat("##fade-after", ref fadeSeconds, 1f, 30f, "%.0f s"))
+            _plugin.Config.OverlayFadeSeconds = fadeSeconds;
+        ImGui.EndDisabled();
+        edited |= ImGui.IsItemDeactivatedAfterEdit();
+        Ui.Hint("Targeting a player shows their label, then it fades.");
         if (edited)
             _plugin.Config.Save();
         Ui.Section("Game start");

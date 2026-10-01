@@ -192,6 +192,31 @@ internal sealed class OdysseyClient : IDisposable
             Revision = revision,
         });
 
+    public void EditParticipant(
+        Participant participant,
+        string first,
+        string last,
+        string world,
+        int threads,
+        StaffRole? strength,
+        StaffRole? harmony,
+        StaffRole? fear,
+        StaffRole? power) =>
+        Send(new ProtocolMessage
+        {
+            Type = MessageType.ParticipantEdit,
+            ParticipantId = participant.Id,
+            FirstName = first,
+            LastName = last,
+            World = world,
+            Threads = threads,
+            Strength = strength ?? StaffRole.None,
+            Harmony = harmony ?? StaffRole.None,
+            Fear = fear ?? StaffRole.None,
+            Power = power ?? StaffRole.None,
+            Revision = participant.Revision,
+        });
+
     public void Pass(string participantId, long revision) =>
         Send(new ProtocolMessage
         {
@@ -207,6 +232,40 @@ internal sealed class OdysseyClient : IDisposable
             ParticipantId = participantId,
             Revision = revision,
         });
+
+    public void ClaimAspect(string offeringId, string participantId) =>
+        Send(new ProtocolMessage
+        {
+            Type = MessageType.AspectClaim,
+            OfferingId = offeringId,
+            ParticipantId = participantId,
+        });
+
+    public void RemoveAspect(string claimId, string password) =>
+        Send(new ProtocolMessage
+        {
+            Type = MessageType.AspectRemove,
+            ClaimId = claimId,
+            Password = password,
+        });
+
+    public void SaveGodMacro(string? id, string name, string text) =>
+        Send(new ProtocolMessage
+        {
+            Type = MessageType.GodMacroSave,
+            MacroId = string.IsNullOrWhiteSpace(id) ? null : id,
+            Name = name,
+            Text = text,
+        });
+
+    public void RemoveGodMacro(string id) =>
+        Send(new ProtocolMessage
+        {
+            Type = MessageType.GodMacroRemove,
+            MacroId = id,
+        });
+
+    public void NoteLocal(string text) => Remember(LobbyKind.Macro, text);
 
     public void Say(string text)
     {
@@ -304,6 +363,19 @@ internal sealed class OdysseyClient : IDisposable
         {
             if (snapshot.Member(previous.Id) == null)
                 Remember(snapshot, previous.Name, LobbyKind.Leave, "Left the lobby");
+        }
+
+        foreach (AspectClaim claim in snapshot.Claims)
+        {
+            if (_watched.Claims.Any(previous => previous.Id == claim.Id))
+                continue;
+
+            string text = AspectCatalog.ClaimLog(claim);
+            if (_localLog.Any(line => line.Kind == LobbyKind.Claim && line.Text == text && Math.Abs((line.At - DateTime.UtcNow).TotalSeconds) < 30))
+                continue;
+
+            SessionMember? fate = snapshot.Members.FirstOrDefault(member => member.Role == StaffRole.Fate);
+            Push(fate?.Name ?? "Fate", fate?.Role ?? StaffRole.Fate, LobbyKind.Claim, text);
         }
 
         _watched = snapshot.Clone();

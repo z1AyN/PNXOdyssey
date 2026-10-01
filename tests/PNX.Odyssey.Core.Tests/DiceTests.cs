@@ -30,6 +30,44 @@ public class DiceTests
     {
         Assert.Equal(expected, DiceText.ReadRoll(text));
     }
+
+    [Theory]
+    [InlineData("rolls a 4 (out of 6)!", 4, 6)]
+    [InlineData("rolls a 4 (out of 100)!", 4, 100)]
+    [InlineData("rolls a 7 (out of 8)!", 7, 8)]
+    public void Chat_text_reads_the_die_size(string text, int roll, int sides)
+    {
+        Assert.True(DiceText.TryRead(text, out int readRoll, out int readSides));
+        Assert.Equal(roll, readRoll);
+        Assert.Equal(sides, readSides);
+    }
+
+    [Fact]
+    public void A_roll_without_a_die_size_is_not_a_d6()
+    {
+        Assert.False(DiceText.TryRead("1 5", out _, out _));
+    }
+}
+
+public class DjScheduleTests
+{
+    [Fact]
+    public void The_current_dj_is_the_latest_slot_that_has_started()
+    {
+        long[] starts = [100, 200, 300];
+        DjSchedule.Pick before = DjSchedule.Choose(starts, 50);
+        Assert.Equal(-1, before.Current);
+        Assert.Equal(0, before.Next);
+
+        DjSchedule.Pick mid = DjSchedule.Choose(starts, 200);
+        Assert.Equal(1, mid.Current);
+        Assert.Equal(2, mid.Next);
+
+        DjSchedule.Pick after = DjSchedule.Choose(starts, 400);
+        Assert.Equal(2, after.Current);
+        Assert.Equal(-1, after.Next);
+        Assert.Equal("Now playing: Kiwi (twitch.tv/kiwi). Next: Khangomon.", DjSchedule.Shout("Kiwi", "twitch.tv/kiwi", "Khangomon"));
+    }
 }
 
 public class PartyMatcherTests

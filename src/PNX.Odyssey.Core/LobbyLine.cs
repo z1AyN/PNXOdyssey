@@ -12,6 +12,8 @@ public enum LobbyKind
     Run,
     Pass,
     Fail,
+    Claim,
+    Macro,
 }
 
 public sealed class LobbyLine
