@@ -1,7 +1,9 @@
 using System.Numerics;
+using System.Text;
 using Dalamud.Bindings.ImGui;
 using Dalamud.Interface.Windowing;
 using Pnx.Odyssey.Core;
+using Pnx.Odyssey.Services;
 
 namespace Pnx.Odyssey.UI;
 
@@ -14,6 +16,7 @@ internal sealed class MainWindow : Window
     private readonly GodForm _god = new();
     private readonly AspectsForm _aspects = new();
     private readonly MacrosForm _macros = new();
+    private string? _hostNote;
 
     public MainWindow(Plugin plugin) : base("PNX Odyssey##main", ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoScrollWithMouse)
     {
@@ -83,11 +86,96 @@ internal sealed class MainWindow : Window
         if (role is StaffRole.Fate or StaffRole.Director)
         {
             SessionChrome.Strip(snapshot);
+            DrawHostBar(snapshot);
             return DrawHostTabs(role);
         }
 
         SessionChrome.Strip(snapshot);
         return DrawGodTabs(snapshot, role);
+    }
+
+    private void DrawHostBar(SessionSnapshot snapshot)
+    {
+        ImGui.AlignTextToFramePadding();
+        if (ImGui.Button("Claims"))
+            TellClaims(snapshot);
+        ImGui.SameLine();
+        foreach (string id in _plugin.Config.HostHotbar.ToList())
+        {
+            GodMacro? macro = snapshot.Macros.FirstOrDefault(item => item.Id == id);
+            if (macro == null)
+                continue;
+            if (ImGui.Button($"{macro.Name}##host{id}"))
+                _hostNote = RunLines(macro.Text) ? null : $"Could not run {macro.Name}.";
+            ImGui.SameLine();
+        }
+
+        float libraryWidth = ImGui.CalcTextSize("Shared Library").X + 24f;
+        float right = ImGui.GetCursorPosX() + ImGui.GetContentRegionAvail().X - libraryWidth;
+        if (right > ImGui.GetCursorPosX())
+            ImGui.SameLine(right);
+        if (ImGui.Button("Shared Library##host"))
+            _plugin.OpenLibrary();
+        if (_hostNote != null)
+            ImGui.TextColored(Ui.Amber, _hostNote);
+    }
+
+    private void TellClaims(SessionSnapshot snapshot)
+    {
+        if (!_plugin.TryTarget(out PartyPresence target) || string.IsNullOrWhiteSpace(target.World))
+        {
+            _hostNote = "Target a player to tell them the remaining claims.";
+            return;
+        }
+
+        IReadOnlyList<string> parts = AspectCatalog.RemainingSummary(snapshot.Claims);
+        if (parts.Count == 0)
+        {
+            _hostNote = "No claims are left.";
+            return;
+        }
+
+        _hostNote = ChatMacro.Run(PackTells($"{target.Name}@{target.World}", parts))
+            ? null
+            : "Could not send the claims tell.";
+    }
+
+    private static List<string> PackTells(string target, IReadOnlyList<string> parts)
+    {
+        string prefix = $"/tell {target} ";
+        var lines = new List<string>();
+        var current = new StringBuilder();
+        foreach (string part in parts)
+        {
+            string next = current.Length == 0 ? prefix + part : current + "  " + part;
+            if (Encoding.UTF8.GetByteCount(next) <= 180)
+            {
+                current.Clear();
+                current.Append(next);
+                continue;
+            }
+
+            if (current.Length > 0)
+            {
+                lines.Add(current.ToString());
+                lines.Add("/wait 2");
+                current.Clear();
+            }
+
+            current.Append(prefix).Append(part);
+        }
+
+        if (current.Length > 0)
+            lines.Add(current.ToString());
+        return lines;
+    }
+
+    private static bool RunLines(string text)
+    {
+        string[] lines = text
+            .Replace("\r", "", StringComparison.Ordinal)
+            .Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        return ChatMacro.Run(lines);
     }
 
     private string? DrawHostTabs(StaffRole role)

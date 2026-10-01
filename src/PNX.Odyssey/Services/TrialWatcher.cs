@@ -35,19 +35,22 @@ internal sealed class TrialWatcher
             return;
 
         string sender = FirstName(named, message.Sender.TextValue);
-        if (NamesMatch(sender, participant.FullName) || message.Sender.TextValue.Contains(participant.FullName, StringComparison.OrdinalIgnoreCase))
+        string full = message.Message.TextValue ?? "";
+        if (IsPlayer(sender, named, full, message.Sender.TextValue, participant))
         {
-            if (sides == TrialRules.MortalSides && roll >= 1 && roll <= sides)
+            int playerSides = sides == 0 ? TrialRules.MortalSides : sides;
+            if (playerSides == TrialRules.MortalSides && roll >= 1 && roll <= playerSides)
                 client.ReportDie(participant.Id, "player", roll);
             return;
         }
 
         int godSides = TrialRules.DieSides(member.Role);
+        int rolledSides = sides == 0 && godSides == TrialRules.MortalSides ? TrialRules.MortalSides : sides;
         bool random = IsRandomChannel(message.LogKind);
         bool own = NamesMatch(sender, self.Name)
             || message.Sender.TextValue.Contains(self.Name, StringComparison.OrdinalIgnoreCase)
             || (client.ExpectedOwnDice > 0 && (sender.Length == 0 || random));
-        if (!own || sides != godSides || roll < 1 || roll > sides)
+        if (!own || rolledSides != godSides || roll < 1 || roll > rolledSides)
             return;
 
         if (client.ExpectedOwnDice > 0)
@@ -202,6 +205,20 @@ internal sealed class TrialWatcher
         string name = type.ToString();
         return name.Contains("Random", StringComparison.OrdinalIgnoreCase)
             || name.Contains("Dice", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsPlayer(string sender, string named, string message, string rawSender, Participant participant)
+    {
+        if (NamesMatch(sender, participant.FullName) || NamesMatch(named, participant.FullName))
+            return true;
+        if (rawSender.Contains(participant.FullName, StringComparison.OrdinalIgnoreCase)
+            || message.Contains(participant.FullName, StringComparison.OrdinalIgnoreCase))
+            return true;
+        if (participant.FirstName.Length < 2 || participant.LastName.Length < 2)
+            return false;
+        string haystack = $"{sender} {named} {rawSender} {message}";
+        return haystack.Contains(participant.FirstName, StringComparison.OrdinalIgnoreCase)
+            && haystack.Contains(participant.LastName, StringComparison.OrdinalIgnoreCase);
     }
 
     private static string FirstName(string embedded, string sender)

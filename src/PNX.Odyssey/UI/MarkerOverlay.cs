@@ -182,7 +182,9 @@ internal sealed class MarkerOverlay : Window
         float row = Math.Max(icon, fontSize);
         float height = (pad * 2f) + row + (4f * scale) + row;
         var min = new Vector2(anchor.X - (width * 0.5f), anchor.Y - height);
-        draw.AddRectFilled(min, min + new Vector2(width, height), ImGui.GetColorU32(new Vector4(0.03f, 0.02f, 0.05f, 0.78f * opacity)), 5f * scale);
+        var max = min + new Vector2(width, height);
+        draw.AddRectFilled(min, max, ImGui.GetColorU32(new Vector4(0.03f, 0.02f, 0.05f, 0.78f * opacity)), 5f * scale);
+        draw.AddRect(min, max, Fade(new Vector4(0.98f, 0.84f, 0.36f, 1f), opacity), 5f * scale, ImDrawFlags.None, Math.Max(1.25f, 1.5f * scale));
 
         float iconX = min.X + ((width - iconsWidth) * 0.5f);
         float iconY = min.Y + pad;
@@ -238,7 +240,9 @@ internal sealed class MarkerOverlay : Window
 
     private static void DrawBadge(ImDrawListPtr draw, Vector2 min, float size, TrialBadge trial, bool lit, float opacity)
     {
-        Vector4 color = trial.Color with { W = opacity * (lit ? 1f : 0.28f) };
+        Vector4 color = lit
+            ? trial.Color with { W = opacity }
+            : new Vector4(0.56f, 0.56f, 0.56f, opacity);
         uint ink = ImGui.GetColorU32(color);
         Vector2 center = min + new Vector2(size * 0.5f, size * 0.5f);
         float radius = size * 0.42f;

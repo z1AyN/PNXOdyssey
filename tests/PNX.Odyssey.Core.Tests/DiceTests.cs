@@ -43,9 +43,27 @@ public class DiceTests
     }
 
     [Fact]
-    public void A_roll_without_a_die_size_is_not_a_d6()
+    public void A_roll_without_a_die_size_is_unspecified()
     {
-        Assert.False(DiceText.TryRead("1 5", out _, out _));
+        Assert.True(DiceText.TryRead("rolls a 4!", out int roll, out int sides));
+        Assert.Equal(4, roll);
+        Assert.Equal(0, sides);
+    }
+
+    [Fact]
+    public void Remaining_claims_sum_a_person_and_count_a_shared_pool_once()
+    {
+        IReadOnlyList<string> open = AspectCatalog.RemainingSummary([]);
+        Assert.Contains("Ash Yusira (2)", open);
+        Assert.Contains("Chocola Strawberry (2)", open);
+        Assert.Contains("Cassian Hyskaris (1)", open);
+        Assert.DoesNotContain(open, line => line.StartsWith("Ash Yusira", StringComparison.Ordinal) && line != "Ash Yusira (2)");
+
+        var used = new List<AspectClaim> { new() { OfferingId = "ash-voice" }, new() { OfferingId = "cassian-rp" } };
+        IReadOnlyList<string> left = AspectCatalog.RemainingSummary(used);
+        Assert.Contains("Ash Yusira (1)", left);
+        Assert.DoesNotContain("Cassian Hyskaris (1)", left);
+        Assert.DoesNotContain("Cassian Hyskaris (0)", left);
     }
 }
 

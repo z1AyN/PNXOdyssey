@@ -57,6 +57,41 @@ public static class AspectCatalog
             : $"Shared pool: {left} rainbow claims";
     }
 
+    public static IReadOnlyList<string> RemainingSummary(IEnumerable<AspectClaim> claims)
+    {
+        List<AspectClaim> list = claims.ToList();
+        var lines = new List<string>();
+        foreach (IGrouping<string, Offering> group in All.GroupBy(offering => offering.Name, StringComparer.OrdinalIgnoreCase))
+        {
+            var seen = new HashSet<string>(StringComparer.Ordinal);
+            int finite = 0;
+            bool anyFinite = false;
+            bool unlimited = false;
+            foreach (Offering offering in group)
+            {
+                if (offering.Slots is not int slots)
+                {
+                    unlimited = true;
+                    continue;
+                }
+
+                string key = offering.Shared ? offering.PoolId : offering.Id;
+                if (!seen.Add(key))
+                    continue;
+
+                anyFinite = true;
+                finite += Math.Max(0, slots - Used(list, offering));
+            }
+
+            if (anyFinite && finite > 0)
+                lines.Add($"{group.Key} ({finite})");
+            else if (unlimited)
+                lines.Add($"{group.Key} (Unlimited)");
+        }
+
+        return lines;
+    }
+
     public static string ClaimLog(AspectClaim claim)
     {
         Offering? offering = Find(claim.OfferingId);

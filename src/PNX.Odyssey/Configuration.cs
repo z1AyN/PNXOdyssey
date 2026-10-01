@@ -53,6 +53,8 @@ public sealed class Configuration : IPluginConfiguration
 
     public List<string> GodHotbar { get; set; } = [];
 
+    public List<string> HostHotbar { get; set; } = [];
+
     public Dictionary<string, List<LobbyLine>> LobbyLogs { get; set; } = new(StringComparer.OrdinalIgnoreCase);
 
     [NonSerialized]
@@ -79,6 +81,7 @@ public sealed class Configuration : IPluginConfiguration
         Djs ??= [];
         Macros ??= [];
         GodHotbar ??= [];
+        HostHotbar ??= [];
         if (!EventMacrosReady)
         {
             Djs = EventDefaults.Djs();

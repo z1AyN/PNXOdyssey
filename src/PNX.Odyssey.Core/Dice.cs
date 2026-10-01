@@ -49,13 +49,22 @@ public static partial class DiceText
             return false;
 
         Match match = OutOf().Match(text);
-        if (!match.Success)
+        if (match.Success
+            && int.TryParse(match.Groups[1].Value, NumberStyles.None, CultureInfo.InvariantCulture, out roll)
+            && int.TryParse(match.Groups[2].Value, NumberStyles.None, CultureInfo.InvariantCulture, out sides)
+            && roll > 0
+            && sides > 0)
+            return true;
+
+        MatchCollection numbers = RollPattern().Matches(text);
+        if (numbers.Count == 0)
             return false;
-        if (!int.TryParse(match.Groups[1].Value, NumberStyles.None, CultureInfo.InvariantCulture, out roll))
-            return false;
-        if (!int.TryParse(match.Groups[2].Value, NumberStyles.None, CultureInfo.InvariantCulture, out sides))
-            return false;
-        return roll > 0 && sides > 0;
+
+        Match chosen = numbers.Count > 1 && numbers[0].Value == "1"
+            ? numbers[^1]
+            : numbers[0];
+        sides = 0;
+        return int.TryParse(chosen.Value, NumberStyles.None, CultureInfo.InvariantCulture, out roll) && roll > 0;
     }
 
     public static int? ReadRoll(string? text)
