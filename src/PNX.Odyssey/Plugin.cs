@@ -262,17 +262,7 @@ public sealed class Plugin : IDalamudPlugin
         if (!_main.IsOpen)
             Client.WatchedParticipantId = null;
 
-        string? notice = Client.TakeNotice();
-        if (notice != null)
-        {
-            _notifications.AddNotification(new Notification
-            {
-                Title = "PNX Odyssey",
-                Content = notice,
-                Type = NotificationType.Warning,
-                InitialDuration = TimeSpan.FromSeconds(4),
-            });
-        }
+        Client.TakeNotice();
 
         RememberSession();
     }

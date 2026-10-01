@@ -61,7 +61,6 @@ internal sealed class MainWindow : Window
         }
         else
         {
-            Ui.Banner(_plugin.Client.Banner, Ui.Amber);
             SessionChrome.Header(_plugin, snapshot);
             scope = DrawBody(snapshot);
         }

@@ -552,7 +552,21 @@ internal static class SessionChrome
             string label = $"v{versionInfo.Major}.{versionInfo.Minor}.{versionInfo.Build}";
             float syncWidth = 78f;
             float versionWidth = ImGui.CalcTextSize(label).X;
-            float right = ImGui.GetCursorPosX() + ImGui.GetContentRegionAvail().X - syncWidth - versionWidth - 8f;
+            float rightBlock = syncWidth + versionWidth + 8f;
+            float right = ImGui.GetCursorPosX() + ImGui.GetContentRegionAvail().X - rightBlock;
+            string? notice = plugin.Client.Banner;
+            if (!string.IsNullOrWhiteSpace(notice))
+            {
+                float textWidth = ImGui.CalcTextSize(notice).X;
+                float centre = (ImGui.GetCursorPosX() + right) * 0.5f - textWidth * 0.5f;
+                if (centre > ImGui.GetCursorPosX() + 8f)
+                    ImGui.SameLine(centre);
+                else
+                    ImGui.SameLine();
+                ImGui.AlignTextToFramePadding();
+                ImGui.TextColored(Ui.Amber, notice);
+            }
+
             if (right > ImGui.GetCursorPosX())
                 ImGui.SameLine(right);
             ImGui.AlignTextToFramePadding();

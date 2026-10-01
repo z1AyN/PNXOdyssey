@@ -174,12 +174,22 @@ internal sealed class ChatWindow : Window
         string body = $"{who}:  {line.Text}";
         if (talk)
         {
-            ImGui.TextColored(color, body);
+            Wrapped(color, body);
             return;
         }
 
         using (Ui.PushPixels(pixels, true))
-            ImGui.TextColored(color, body);
+            Wrapped(color, body);
+    }
+
+    private static void Wrapped(Vector4 color, string text)
+    {
+        float edge = ImGui.GetWindowContentRegionMax().X;
+        ImGui.PushTextWrapPos(edge);
+        ImGui.PushStyleColor(ImGuiCol.Text, color);
+        ImGui.TextWrapped(text);
+        ImGui.PopStyleColor();
+        ImGui.PopTextWrapPos();
     }
 
     private static unsafe void Play(int index)

@@ -16,7 +16,6 @@ internal sealed class SessionForm
         OdysseyClient client = plugin.Client;
         if (!client.UsingServer)
             Ui.Hint("Local table. It clears when the plugin reloads.");
-        Ui.Banner(client.Banner, Ui.Amber);
 
         Ui.Section("New session");
         ImGui.SetNextItemWidth(280);
