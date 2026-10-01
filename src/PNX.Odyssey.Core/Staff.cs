@@ -40,6 +40,8 @@ public static class StaffText
 
     public static bool IsGod(StaffRole role) => AspectOf(role) != null;
 
+    public static bool IsExclusive(StaffRole role) => role == StaffRole.Director || IsGod(role);
+
     public static bool RunsTable(StaffRole role) => role is StaffRole.Fate or StaffRole.Director;
 
     public static TrialAspect? AspectOf(StaffRole role) => role switch

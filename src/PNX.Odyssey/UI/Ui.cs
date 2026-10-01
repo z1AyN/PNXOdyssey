@@ -513,7 +513,7 @@ internal static class SessionChrome
 
         foreach (StaffRole role in Enum.GetValues<StaffRole>())
         {
-            SessionMember? taken = StaffText.IsGod(role)
+            SessionMember? taken = StaffText.IsExclusive(role)
                 ? snapshot.Members.FirstOrDefault(member => member.Connected && member.Role == role && member.Id != client.SelfId)
                 : null;
             string label = taken == null

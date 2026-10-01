@@ -225,7 +225,7 @@ public sealed class SessionHost
             return Reject(client, "Choose a role.");
 
         StaffRole role = message.Role.Value;
-        if (StaffText.IsGod(role))
+        if (StaffText.IsExclusive(role))
         {
             SessionMember? taken = client.Session.Members.Values.FirstOrDefault(member =>
                 member.Connected
@@ -836,7 +836,7 @@ public sealed class SessionHost
         member.Connected = true;
         member.LastSeen = utcNow;
         client.Member = member;
-        if (StaffText.IsGod(member.Role)
+        if (StaffText.IsExclusive(member.Role)
             && session.Members.Values.Any(other => other.Connected
                 && other.Role == member.Role
                 && !string.Equals(other.Id, member.Id, StringComparison.OrdinalIgnoreCase)))
@@ -850,7 +850,7 @@ public sealed class SessionHost
 
     private static void ReleaseRoleConflicts(LiveSession session, StaffRole role, string holderId)
     {
-        if (!StaffText.IsGod(role))
+        if (!StaffText.IsExclusive(role))
             return;
 
         foreach (SessionMember member in session.Members.Values)

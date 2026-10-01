@@ -16,7 +16,7 @@ internal sealed class TrialWatcher
 
     public void OnChat(IChatMessage message, OdysseyClient client, CharacterIdentity? self)
     {
-        if (self == null || !IsPartyChannel(message.LogKind) || !TryReadRoll(message.Message, out int roll, out int sides, out string named))
+        if (self == null || !IsRollChannel(message.LogKind) || !TryReadRoll(message.Message, out int roll, out int sides, out string named))
             return;
 
         SessionSnapshot? snapshot = client.Snapshot;
@@ -43,13 +43,14 @@ internal sealed class TrialWatcher
         }
 
         int godSides = TrialRules.DieSides(member.Role);
+        bool random = IsRandomChannel(message.LogKind);
         bool own = NamesMatch(sender, self.Name)
             || message.Sender.TextValue.Contains(self.Name, StringComparison.OrdinalIgnoreCase)
-            || (sender.Length == 0 && client.ExpectedOwnDice > 0);
+            || (client.ExpectedOwnDice > 0 && (sender.Length == 0 || random));
         if (!own || sides != godSides || roll < 1 || roll > sides)
             return;
 
-        if (sender.Length == 0)
+        if (client.ExpectedOwnDice > 0)
             client.ExpectOwnDice(Math.Max(0, client.ExpectedOwnDice - 1));
         client.ReportDie(participant.Id, "god", roll);
     }
@@ -174,8 +175,9 @@ internal sealed class TrialWatcher
                 afterIcon.Append(' ').Append(text.Text);
         }
 
-        string source = afterIcon.Length > 0 ? afterIcon.ToString() : message.TextValue;
-        return DiceText.TryRead(source, out roll, out sides);
+        string after = afterIcon.ToString();
+        string full = message.TextValue ?? "";
+        return DiceText.TryRead(full, out roll, out sides) || DiceText.TryRead(after, out roll, out sides);
     }
 
     private static bool IsDiceIcon(Payload payload)
@@ -187,10 +189,19 @@ internal sealed class TrialWatcher
             && (payload is IconPayload || label.Contains("Icon", StringComparison.OrdinalIgnoreCase));
     }
 
-    private static bool IsPartyChannel(XivChatType type)
+    private static bool IsRollChannel(XivChatType type)
     {
         string name = type.ToString();
-        return name.Contains("Party", StringComparison.OrdinalIgnoreCase);
+        return name.Contains("Party", StringComparison.OrdinalIgnoreCase)
+            || name.Contains("Alliance", StringComparison.OrdinalIgnoreCase)
+            || IsRandomChannel(type);
+    }
+
+    private static bool IsRandomChannel(XivChatType type)
+    {
+        string name = type.ToString();
+        return name.Contains("Random", StringComparison.OrdinalIgnoreCase)
+            || name.Contains("Dice", StringComparison.OrdinalIgnoreCase);
     }
 
     private static string FirstName(string embedded, string sender)
