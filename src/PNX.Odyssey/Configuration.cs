@@ -55,6 +55,10 @@ public sealed class Configuration : IPluginConfiguration
 
     public List<string> HostHotbar { get; set; } = [];
 
+    public Dictionary<string, List<VenuePerson>> VenueSeen { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+
+    public Dictionary<string, List<VenueTouch>> VenueDice { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+
     public Dictionary<string, List<LobbyLine>> LobbyLogs { get; set; } = new(StringComparer.OrdinalIgnoreCase);
 
     [NonSerialized]
@@ -82,6 +86,8 @@ public sealed class Configuration : IPluginConfiguration
         Macros ??= [];
         GodHotbar ??= [];
         HostHotbar ??= [];
+        VenueSeen ??= new Dictionary<string, List<VenuePerson>>(StringComparer.OrdinalIgnoreCase);
+        VenueDice ??= new Dictionary<string, List<VenueTouch>>(StringComparer.OrdinalIgnoreCase);
         if (!EventMacrosReady)
         {
             Djs = EventDefaults.Djs();

@@ -16,6 +16,7 @@ internal sealed class MainWindow : Window
     private readonly GodForm _god = new();
     private readonly AspectsForm _aspects = new();
     private readonly MacrosForm _macros = new();
+    private readonly WatcherForm _watcher = new();
     private string? _hostNote;
 
     public MainWindow(Plugin plugin) : base("PNX Odyssey##main", ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoScrollWithMouse)
@@ -78,8 +79,22 @@ internal sealed class MainWindow : Window
         StaffRole role = SessionChrome.RoleOf(_plugin.Client, snapshot);
         if (role == StaffRole.None)
         {
-            Ui.Hint("Pick a seat. Fate and the Director run the table. A god runs their own trial.");
-            SessionChrome.Members(snapshot);
+            if (!ImGui.BeginTabBar("seat"))
+                return null;
+            if (ImGui.BeginTabItem("Lobby"))
+            {
+                Ui.Hint("Pick a seat. Fate and the Director run the table. A god runs their own trial.");
+                SessionChrome.Members(snapshot);
+                ImGui.EndTabItem();
+            }
+
+            if (ImGui.BeginTabItem("Watcher"))
+            {
+                _watcher.Draw(_plugin);
+                ImGui.EndTabItem();
+            }
+
+            ImGui.EndTabBar();
             return null;
         }
 
@@ -214,6 +229,12 @@ internal sealed class MainWindow : Window
             ImGui.EndTabItem();
         }
 
+        if (ImGui.BeginTabItem("Watcher"))
+        {
+            _watcher.Draw(_plugin);
+            ImGui.EndTabItem();
+        }
+
         ImGui.EndTabBar();
         return scope;
     }
@@ -233,6 +254,12 @@ internal sealed class MainWindow : Window
         if (ImGui.BeginTabItem("Players"))
         {
             _god.Draw(_plugin, snapshot, role, GodTab.Players);
+            ImGui.EndTabItem();
+        }
+
+        if (ImGui.BeginTabItem("Watcher"))
+        {
+            _watcher.Draw(_plugin);
             ImGui.EndTabItem();
         }
 

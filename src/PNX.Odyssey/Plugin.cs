@@ -92,6 +92,12 @@ public sealed class Plugin : IDalamudPlugin
 
     internal OdysseyClient Client { get; }
 
+    internal IObjectTable Objects => _objects;
+
+    internal CharacterIdentity? Self => _self;
+
+    private readonly VenueWatch _venue = new();
+
     internal void OpenLibrary() => _library.IsOpen = true;
 
     internal void OpenSymbols(Action<string> apply)
@@ -108,6 +114,8 @@ public sealed class Plugin : IDalamudPlugin
         macro.Prefix = symbol;
         Config.Save();
     }
+
+    internal IReadOnlyCollection<string> VenueHere => _venue.Here;
 
     public void OpenMain() => _main.IsOpen = true;
 
@@ -259,6 +267,7 @@ public sealed class Plugin : IDalamudPlugin
 
         Client.Tick(DateTime.UtcNow);
         MacrosForm.PushDue(this);
+        _venue.Tick(this, DateTime.UtcNow);
         if (!_main.IsOpen)
             Client.WatchedParticipantId = null;
 
