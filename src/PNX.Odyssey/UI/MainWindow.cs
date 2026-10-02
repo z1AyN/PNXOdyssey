@@ -114,21 +114,18 @@ internal sealed class MainWindow : Window
         ImGui.AlignTextToFramePadding();
         if (ImGui.Button("Claims"))
             TellClaims(snapshot);
-        ImGui.SameLine();
         foreach (string id in _plugin.Config.HostHotbar.ToList())
         {
             GodMacro? macro = snapshot.Macros.FirstOrDefault(item => item.Id == id);
             if (macro == null)
                 continue;
-            if (ImGui.Button($"{macro.Name}##host{id}"))
+            string label = macro.Name;
+            Ui.WrapSameLine($"{label}##host{id}");
+            if (ImGui.Button($"{label}##host{id}"))
                 _hostNote = RunLines(macro.Text) ? null : $"Could not run {macro.Name}.";
-            ImGui.SameLine();
         }
 
-        float libraryWidth = ImGui.CalcTextSize("Shared Library").X + 24f;
-        float right = ImGui.GetCursorPosX() + ImGui.GetContentRegionAvail().X - libraryWidth;
-        if (right > ImGui.GetCursorPosX())
-            ImGui.SameLine(right);
+        Ui.WrapSameLine("Shared Library##host");
         if (ImGui.Button("Shared Library##host"))
             _plugin.OpenLibrary();
         if (_hostNote != null)

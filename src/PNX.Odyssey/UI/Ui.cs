@@ -314,6 +314,17 @@ internal static class Ui
         pushed?.Dispose();
     }
 
+    public static void WrapSameLine(string label, float reserve = 0f)
+    {
+        Vector2 pad = ImGui.GetStyle().FramePadding;
+        float width = ImGui.CalcTextSize(label).X + (pad.X * 2f);
+        float spacing = ImGui.GetStyle().ItemSpacing.X;
+        if (ImGui.GetCursorPosX() > ImGui.GetWindowContentRegionMin().X
+            && width + spacing + reserve > ImGui.GetContentRegionAvail().X)
+            return;
+        ImGui.SameLine();
+    }
+
     public static void DiceTable(
         string playerLabel,
         IReadOnlyList<int> playerRolls,

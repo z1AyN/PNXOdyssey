@@ -34,6 +34,13 @@ public sealed class Plugin : IDalamudPlugin
     private readonly HashSet<string> _marks = new(StringComparer.OrdinalIgnoreCase);
     private CharacterIdentity? _self;
     private bool _resumeArmed = true;
+    private DateTime _nextSelf;
+    private DateTime _nextPush;
+    private readonly Dictionary<uint, string> _worldNames = new();
+    private readonly Dictionary<string, IPlayerCharacter> _nearby = new(StringComparer.OrdinalIgnoreCase);
+    private int _nearbyStamp = -1;
+    private int _presenceStamp;
+    private long _nearbyAt;
 
     public Plugin(
         IDalamudPluginInterface pluginInterface,
@@ -168,12 +175,15 @@ public sealed class Plugin : IDalamudPlugin
         return local.Position + new Vector3(0f, 1.2f, 0f);
     }
 
+    internal void BeginPresence() => _presenceStamp++;
+
     public IEnumerable<Vector3> MarkedPositions()
     {
         SessionSnapshot? snapshot = Client.Snapshot;
         if (snapshot == null)
             yield break;
 
+        EnsurePresence();
         foreach (string id in _marks)
         {
             Participant? participant = snapshot.Participant(id);
@@ -188,10 +198,21 @@ public sealed class Plugin : IDalamudPlugin
         if (snapshot == null)
             yield break;
 
+        EnsurePresence();
+        Vector3? here = LocalChest();
         foreach (Participant participant in snapshot.Participants)
         {
-            if (TryFind(participant, out IPlayerCharacter? character) && character != null)
-                yield return (participant, character.Position + new Vector3(0f, BarHeight(character), 0f));
+            if (!TryFind(participant, out IPlayerCharacter? character) || character == null)
+                continue;
+            if (here != null)
+            {
+                float dx = character.Position.X - here.Value.X;
+                float dz = character.Position.Z - here.Value.Z;
+                if ((dx * dx) + (dz * dz) > 3600f)
+                    continue;
+            }
+
+            yield return (participant, character.Position + new Vector3(0f, BarHeight(character), 0f));
         }
     }
 
@@ -213,8 +234,14 @@ public sealed class Plugin : IDalamudPlugin
 
     public bool Project(Vector3 world, out Vector2 screen) => _gameGui.WorldToScreen(world, out screen);
 
-    private bool TryFind(Participant participant, out IPlayerCharacter? character)
+    private void EnsurePresence()
     {
+        long now = Environment.TickCount64;
+        if (_nearbyStamp == _presenceStamp && now - _nearbyAt < 200)
+            return;
+        _nearbyStamp = _presenceStamp;
+        _nearbyAt = now;
+        _nearby.Clear();
         foreach (IGameObject gameObject in _objects)
         {
             if (gameObject is not IPlayerCharacter player)
@@ -224,19 +251,47 @@ public sealed class Plugin : IDalamudPlugin
             string world;
             try
             {
-                name = player.Name.TextValue;
-                world = player.HomeWorld.Value.Name.ToString() ?? "";
+                name = player.Name.TextValue.Trim();
+                if (name.Length == 0)
+                    continue;
+                world = WorldName(player);
             }
             catch (Exception ex) when (ex is InvalidOperationException or NullReferenceException)
             {
                 continue;
             }
 
-            if (PartyMatcher.SamePerson(name, world, participant))
-            {
-                character = player;
-                return true;
-            }
+            _nearby[$"{name}|{world}"] = player;
+        }
+    }
+
+    private string WorldName(IPlayerCharacter player)
+    {
+        uint id = player.HomeWorld.RowId;
+        if (_worldNames.TryGetValue(id, out string? cached))
+            return cached;
+
+        string name = "";
+        try
+        {
+            name = player.HomeWorld.Value.Name.ToString()?.Trim() ?? "";
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or NullReferenceException)
+        {
+        }
+
+        _worldNames[id] = name;
+        return name;
+    }
+
+    private bool TryFind(Participant participant, out IPlayerCharacter? character)
+    {
+        EnsurePresence();
+        string key = $"{participant.FullName.Trim()}|{participant.World.Trim()}";
+        if (_nearby.TryGetValue(key, out IPlayerCharacter? found))
+        {
+            character = found;
+            return true;
         }
 
         character = null;
@@ -248,6 +303,8 @@ public sealed class Plugin : IDalamudPlugin
         _framework.Update -= OnUpdate;
         _chat.ChatMessage -= OnChat;
         _commands.RemoveHandler("/odyssey");
+        _venue.Flush(this);
+        Config.FlushSave();
         _windows.RemoveAllWindows();
         Ui.ReleaseNameFont();
         Client.Dispose();
@@ -259,20 +316,30 @@ public sealed class Plugin : IDalamudPlugin
 
     private void OnUpdate(IFramework framework)
     {
-        if (TrialWatcher.TrySelf(_playerState, out CharacterIdentity identity))
+        DateTime now = DateTime.UtcNow;
+        if (now >= _nextSelf)
         {
-            _self = identity;
-            Client.EnsureIdentity(identity);
+            _nextSelf = now.AddSeconds(1);
+            if (TrialWatcher.TrySelf(_playerState, out CharacterIdentity identity))
+            {
+                _self = identity;
+                Client.EnsureIdentity(identity);
+            }
         }
 
-        Client.Tick(DateTime.UtcNow);
-        MacrosForm.PushDue(this);
-        _venue.Tick(this, DateTime.UtcNow);
+        Client.Tick(now);
+        if (now >= _nextPush)
+        {
+            _nextPush = now.AddSeconds(1);
+            MacrosForm.PushDue(this);
+        }
+
+        _venue.Tick(this, now);
+        Config.TickSave(now);
         if (!_main.IsOpen)
             Client.WatchedParticipantId = null;
 
         Client.TakeNotice();
-
         RememberSession();
     }
 

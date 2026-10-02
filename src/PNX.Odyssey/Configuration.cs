@@ -64,6 +64,12 @@ public sealed class Configuration : IPluginConfiguration
     [NonSerialized]
     private IDalamudPluginInterface? _plugin;
 
+    [NonSerialized]
+    private bool _saveDirty;
+
+    [NonSerialized]
+    private DateTime _nextDeferredSave = DateTime.MinValue;
+
     public void Initialize(IDalamudPluginInterface plugin)
     {
         _plugin = plugin;
@@ -121,6 +127,30 @@ public sealed class Configuration : IPluginConfiguration
     }
 
     public void Save() => _plugin?.SavePluginConfig(this);
+
+    public void SaveDeferred()
+    {
+        if (_saveDirty)
+            return;
+        _saveDirty = true;
+        _nextDeferredSave = DateTime.UtcNow.AddSeconds(60);
+    }
+
+    public void TickSave(DateTime utcNow)
+    {
+        if (!_saveDirty || utcNow < _nextDeferredSave)
+            return;
+        _saveDirty = false;
+        _plugin?.SavePluginConfig(this);
+    }
+
+    public void FlushSave()
+    {
+        if (!_saveDirty)
+            return;
+        _saveDirty = false;
+        _plugin?.SavePluginConfig(this);
+    }
 
     public string[] GameStartLines() => GameStartMacro
         .Replace("\r", "", StringComparison.Ordinal)

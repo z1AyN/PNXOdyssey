@@ -19,6 +19,7 @@ internal sealed class OdysseyClient : IDisposable
     private readonly List<LobbyLine> _localLog = [];
     private readonly Configuration _config;
     private SessionSnapshot? _watched;
+    private SessionSnapshot? _watchSource;
     private string? _logSessionId;
 
     public IReadOnlyList<LobbyLine> Lines => _localLog;
@@ -283,6 +284,9 @@ internal sealed class OdysseyClient : IDisposable
 
     private void Watch(SessionSnapshot? snapshot)
     {
+        if (ReferenceEquals(_watchSource, snapshot))
+            return;
+        _watchSource = snapshot;
         if (snapshot == null)
             return;
 
@@ -432,7 +436,7 @@ internal sealed class OdysseyClient : IDisposable
             return;
 
         _config.LobbyLogs[_logSessionId] = _localLog.Select(line => line.Clone()).ToList();
-        _config.Save();
+        _config.SaveDeferred();
     }
 
     public void ReportDie(string participantId, string side, int value)

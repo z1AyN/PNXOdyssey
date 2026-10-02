@@ -10,6 +10,8 @@ internal sealed class MarkerOverlay : Window
     private readonly Plugin _plugin;
     private readonly Dictionary<string, double> _shownAt = new(StringComparer.OrdinalIgnoreCase);
     private string _lastTarget = "\0";
+    private string? _targetedId;
+    private static readonly Vector2[] BoltScratch = new Vector2[4];
 
     public MarkerOverlay(Plugin plugin) : base("PNX Odyssey Mark##mark",
         ImGuiWindowFlags.NoDecoration
@@ -22,11 +24,17 @@ internal sealed class MarkerOverlay : Window
         _plugin = plugin;
         IsOpen = true;
         RespectCloseHotkey = false;
-        ForceMainWindow = true;
+        ForceMainWindow = false;
     }
 
-    public override bool DrawConditions() =>
-        _plugin.HasMarks || (_plugin.Client.Snapshot?.Participants.Count ?? 0) > 0;
+    public override bool DrawConditions()
+    {
+        if (_plugin.HasMarks)
+            return true;
+        if (!_plugin.Config.OverlayEnabled && !_plugin.Config.OverlayFade)
+            return false;
+        return (_plugin.Client.Snapshot?.Participants.Count ?? 0) > 0;
+    }
 
     public override void PreDraw()
     {
@@ -38,18 +46,24 @@ internal sealed class MarkerOverlay : Window
 
     public override void Draw()
     {
+        _plugin.BeginPresence();
         Vector2 origin = ImGui.GetMainViewport().Pos;
         ImDrawListPtr draw = ImGui.GetBackgroundDrawList();
         Vector3? from = _plugin.LocalChest();
-        if (from != null)
+        if (from != null && _plugin.HasMarks)
         {
             foreach (Vector3 target in _plugin.MarkedPositions())
                 DrawLine(draw, origin, from.Value, target);
         }
 
+        if (!_plugin.Config.OverlayEnabled && !_plugin.Config.OverlayFade)
+            return;
+
         Vector2 view = ImGui.GetMainViewport().Size;
+        _targetedId = ResolveTargetedId();
         NoteTarget();
         var visible = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        int drawn = 0;
         foreach ((Participant player, Vector3 head) in _plugin.NearbyRegistered())
         {
             visible.Add(player.Id);
@@ -58,12 +72,26 @@ internal sealed class MarkerOverlay : Window
                 continue;
             if (!_plugin.Project(head, out Vector2 screen))
                 continue;
-            if (screen.X < 0 || screen.Y < 0 || screen.X > view.X || screen.Y > view.Y)
+            if (screen.X < -40 || screen.Y < -40 || screen.X > view.X + 40 || screen.Y > view.Y + 40)
                 continue;
             DrawProgress(draw, screen + origin, player, fade);
+            if (++drawn >= 24)
+                break;
         }
 
-        List<string> gone = _shownAt.Keys.Where(id => !visible.Contains(id)).ToList();
+        if (_shownAt.Count == 0)
+            return;
+        List<string>? gone = null;
+        foreach (string id in _shownAt.Keys)
+        {
+            if (visible.Contains(id))
+                continue;
+            gone ??= [];
+            gone.Add(id);
+        }
+
+        if (gone == null)
+            return;
         foreach (string id in gone)
             _shownAt.Remove(id);
     }
@@ -76,7 +104,7 @@ internal sealed class MarkerOverlay : Window
             return;
         }
 
-        string target = TargetedId() ?? "";
+        string target = _targetedId ?? "";
         if (string.Equals(target, _lastTarget, StringComparison.OrdinalIgnoreCase))
             return;
 
@@ -89,8 +117,7 @@ internal sealed class MarkerOverlay : Window
     {
         Configuration config = _plugin.Config;
         double now = ImGui.GetTime();
-        string? targetedId = TargetedId();
-        bool aimed = targetedId != null && string.Equals(targetedId, player.Id, StringComparison.OrdinalIgnoreCase);
+        bool aimed = _targetedId != null && string.Equals(_targetedId, player.Id, StringComparison.OrdinalIgnoreCase);
         if (config.OverlayFade && aimed && _shownAt.TryGetValue(player.Id, out double aimedAt))
             return AgeFade(now, aimedAt, config.OverlayFadeSeconds);
 
@@ -107,7 +134,7 @@ internal sealed class MarkerOverlay : Window
         return AgeFade(now, started, config.OverlayFadeSeconds);
     }
 
-    private string? TargetedId()
+    private string? ResolveTargetedId()
     {
         SessionSnapshot? snapshot = _plugin.Client.Snapshot;
         if (snapshot == null || !_plugin.TryTarget(out PartyPresence presence))
@@ -126,25 +153,23 @@ internal sealed class MarkerOverlay : Window
 
     private void DrawLine(ImDrawListPtr draw, Vector2 origin, Vector3 from, Vector3 to)
     {
-        var points = new List<Vector2>(17);
+        Span<Vector2> points = stackalloc Vector2[17];
+        int count = 0;
         for (int step = 0; step <= 16; step++)
         {
             Vector3 world = Vector3.Lerp(from, to, step / 16f);
             if (!_plugin.Project(world, out Vector2 screen))
                 continue;
-            points.Add(screen + origin);
+            points[count++] = screen + origin;
         }
 
-        if (points.Count < 2)
+        if (count < 2)
             return;
 
-        Span<Vector2> span = CollectionsMarshalSpan(points);
-        draw.AddPolyline(ref span[0], points.Count, ImGui.GetColorU32(new Vector4(1f, 0.78f, 0.28f, 0.28f)), ImDrawFlags.None, 10f);
-        draw.AddPolyline(ref span[0], points.Count, ImGui.GetColorU32(new Vector4(1f, 0.86f, 0.42f, 0.7f)), ImDrawFlags.None, 4f);
-        draw.AddPolyline(ref span[0], points.Count, ImGui.GetColorU32(new Vector4(1f, 0.95f, 0.72f, 1f)), ImDrawFlags.None, 1.6f);
+        draw.AddPolyline(ref points[0], count, ImGui.GetColorU32(new Vector4(1f, 0.78f, 0.28f, 0.28f)), ImDrawFlags.None, 10f);
+        draw.AddPolyline(ref points[0], count, ImGui.GetColorU32(new Vector4(1f, 0.86f, 0.42f, 0.7f)), ImDrawFlags.None, 4f);
+        draw.AddPolyline(ref points[0], count, ImGui.GetColorU32(new Vector4(1f, 0.95f, 0.72f, 1f)), ImDrawFlags.None, 1.6f);
     }
-
-    private static Span<Vector2> CollectionsMarshalSpan(List<Vector2> points) => System.Runtime.InteropServices.CollectionsMarshal.AsSpan(points);
 
     private static readonly TrialBadge[] Trials =
     [
@@ -230,7 +255,7 @@ internal sealed class MarkerOverlay : Window
 
     private static void Ring(ImDrawListPtr draw, Vector2 center, float radius, uint color)
     {
-        draw.AddCircle(center, radius, color, 16, 1.6f);
+        draw.AddCircle(center, radius, color, 12, 1.6f);
         draw.AddTriangleFilled(
             center + new Vector2(radius * 0.2f, -radius * 0.95f),
             center + new Vector2(radius * 0.95f, -radius * 0.15f),
@@ -267,8 +292,11 @@ internal sealed class MarkerOverlay : Window
                 draw.AddLine(new Vector2(center.X - radius, y2), new Vector2(center.X + radius, y2), ink, 1.4f);
                 break;
             default:
-                Vector2[] bolt = BoltPoints(center, radius);
-                draw.AddPolyline(ref bolt[0], 4, ink, ImDrawFlags.None, 1.8f);
+                BoltScratch[0] = center + new Vector2(-radius * 0.2f, -radius);
+                BoltScratch[1] = center + new Vector2(radius * 0.55f, -radius * 0.05f);
+                BoltScratch[2] = center + new Vector2(-radius * 0.15f, radius * 0.05f);
+                BoltScratch[3] = center + new Vector2(radius * 0.25f, radius);
+                draw.AddPolyline(ref BoltScratch[0], 4, ink, ImDrawFlags.None, 1.8f);
                 break;
         }
     }
@@ -283,12 +311,4 @@ internal sealed class MarkerOverlay : Window
         else
             draw.AddTriangle(a, b, c, color, 1.3f);
     }
-
-    private static Vector2[] BoltPoints(Vector2 center, float radius) =>
-    [
-        center + new Vector2(-radius * 0.2f, -radius),
-        center + new Vector2(radius * 0.55f, -radius * 0.05f),
-        center + new Vector2(-radius * 0.15f, radius * 0.05f),
-        center + new Vector2(radius * 0.25f, radius),
-    ];
 }

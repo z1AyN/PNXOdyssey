@@ -6,30 +6,44 @@ namespace Pnx.Odyssey.Services;
 
 internal sealed class VenueWatch
 {
-    private DateTime _next;
+    private DateTime _nextScan;
     private string? _diceSession;
+    private bool _dirty;
     private readonly HashSet<string> _here = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, int> _dice = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<uint, string> _worlds = new();
 
     public IReadOnlyCollection<string> Here => _here;
 
     public void Tick(Plugin plugin, DateTime utcNow)
     {
-        if (utcNow >= _next)
+        if (utcNow >= _nextScan)
         {
-            _next = utcNow.AddSeconds(1);
+            _nextScan = utcNow.AddSeconds(3);
             Scan(plugin);
+            NoteDice(plugin, utcNow);
+            Flush(plugin);
         }
+    }
 
-        NoteDice(plugin, utcNow);
+    public void Flush(Plugin plugin)
+    {
+        if (!_dirty)
+            return;
+        _dirty = false;
+        plugin.Config.SaveDeferred();
     }
 
     private void Scan(Plugin plugin)
     {
         string session = plugin.Client.Snapshot?.Id ?? "local";
         List<VenuePerson> seen = Book(plugin.Config, session);
+        var index = new Dictionary<string, VenuePerson>(StringComparer.OrdinalIgnoreCase);
+        foreach (VenuePerson person in seen)
+            index[Key(person.Name, person.World)] = person;
+
         var now = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        bool changed = false;
+        string? selfName = plugin.Self?.Name;
         foreach (IGameObject actor in plugin.Objects)
         {
             if (actor is not IPlayerCharacter player)
@@ -40,42 +54,39 @@ internal sealed class VenueWatch
             try
             {
                 name = player.Name.TextValue.Trim();
-                world = player.HomeWorld.Value.Name.ToString()?.Trim() ?? "";
+                if (name.Length == 0)
+                    continue;
+                if (selfName != null && string.Equals(name, selfName, StringComparison.OrdinalIgnoreCase))
+                    continue;
+                world = WorldName(player);
             }
             catch (Exception ex) when (ex is InvalidOperationException or NullReferenceException)
             {
                 continue;
             }
 
-            if (name.Length == 0)
-                continue;
-            if (plugin.Self is { } self && string.Equals(name, self.Name, StringComparison.OrdinalIgnoreCase))
-                continue;
-
             string key = Key(name, world);
             now.Add(key);
             if (_here.Contains(key))
                 continue;
 
-            VenuePerson? person = seen.FirstOrDefault(item => string.Equals(Key(item.Name, item.World), key, StringComparison.OrdinalIgnoreCase));
-            if (person == null)
+            if (index.TryGetValue(key, out VenuePerson? person))
             {
-                seen.Add(new VenuePerson { Name = name, World = world, Visits = 1 });
-                changed = true;
-                continue;
+                person.Visits++;
+            }
+            else
+            {
+                person = new VenuePerson { Name = name, World = world, Visits = 1 };
+                seen.Add(person);
+                index[key] = person;
             }
 
-            person.Visits++;
-            person.Name = name;
-            person.World = world;
-            changed = true;
+            MarkDirty();
         }
 
         _here.Clear();
         foreach (string key in now)
             _here.Add(key);
-        if (changed)
-            plugin.Config.Save();
     }
 
     private void NoteDice(Plugin plugin, DateTime utcNow)
@@ -92,8 +103,7 @@ internal sealed class VenueWatch
             return;
         }
 
-        bool changed = false;
-        List<VenueTouch> touches = DiceBook(plugin.Config, snapshot.Id);
+        List<VenueTouch>? touches = null;
         foreach (TrialBoard board in snapshot.Boards)
         {
             int count = board.PlayerRolls.Count + board.GodRolls.Count;
@@ -103,13 +113,11 @@ internal sealed class VenueWatch
                 continue;
             }
 
-            if (count <= previous)
-            {
-                _dice[board.ParticipantId] = count;
-                continue;
-            }
-
             _dice[board.ParticipantId] = count;
+            if (count <= previous)
+                continue;
+
+            touches ??= DiceBook(plugin.Config, snapshot.Id);
             VenueTouch? touch = touches.FirstOrDefault(item => string.Equals(item.ParticipantId, board.ParticipantId, StringComparison.OrdinalIgnoreCase));
             if (touch == null)
             {
@@ -126,11 +134,29 @@ internal sealed class VenueWatch
                 touch.Count += count - previous;
             }
 
-            changed = true;
+            MarkDirty();
+        }
+    }
+
+    private void MarkDirty() => _dirty = true;
+
+    private string WorldName(IPlayerCharacter player)
+    {
+        uint id = player.HomeWorld.RowId;
+        if (_worlds.TryGetValue(id, out string? cached))
+            return cached;
+
+        string name = "";
+        try
+        {
+            name = player.HomeWorld.Value.Name.ToString()?.Trim() ?? "";
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or NullReferenceException)
+        {
         }
 
-        if (changed)
-            plugin.Config.Save();
+        _worlds[id] = name;
+        return name;
     }
 
     public static string Key(string name, string world) => $"{name.Trim()}|{world.Trim()}";

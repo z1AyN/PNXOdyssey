@@ -226,21 +226,18 @@ internal sealed class GodForm
     {
         ImGui.AlignTextToFramePadding();
         ImGui.Text("Macros");
-        ImGui.SameLine();
         foreach (string id in plugin.Config.GodHotbar.ToList())
         {
             GodMacro? macro = snapshot.Macros.FirstOrDefault(item => item.Id == id);
             if (macro == null)
                 continue;
-            if (ImGui.Button($"{macro.Name}##hot{id}"))
+            string label = macro.Name;
+            Ui.WrapSameLine($"{label}##hot{id}");
+            if (ImGui.Button($"{label}##hot{id}"))
                 RunShared(plugin, macro);
-            ImGui.SameLine();
         }
 
-        float libraryWidth = ImGui.CalcTextSize("Shared Library").X + 24f;
-        float right = ImGui.GetCursorPosX() + ImGui.GetContentRegionAvail().X - libraryWidth;
-        if (right > ImGui.GetCursorPosX())
-            ImGui.SameLine(right);
+        Ui.WrapSameLine("Shared Library");
         if (ImGui.Button("Shared Library"))
             plugin.OpenLibrary();
     }
