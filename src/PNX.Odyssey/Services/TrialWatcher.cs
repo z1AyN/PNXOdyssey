@@ -34,23 +34,23 @@ internal sealed class TrialWatcher
         if (participant == null)
             return;
 
-        string sender = FirstName(named, message.Sender.TextValue);
+        string rawSender = StripChatJunk(message.Sender.TextValue);
+        string sender = FirstName(named, rawSender);
         string full = message.Message.TextValue ?? "";
-        if (IsPlayer(sender, named, full, message.Sender.TextValue, participant))
+        if (IsPlayer(sender, named, full, rawSender, participant))
         {
-            int playerSides = sides == 0 ? TrialRules.MortalSides : sides;
-            if (playerSides == TrialRules.MortalSides && roll >= 1 && roll <= playerSides)
+            // Player row only accepts /dice 6 → Random! (1-6) R
+            if (sides == TrialRules.MortalSides && roll >= 1 && roll <= sides)
                 client.ReportDie(participant.Id, "player", roll);
             return;
         }
 
         int godSides = TrialRules.DieSides(member.Role);
-        int rolledSides = sides == 0 && godSides == TrialRules.MortalSides ? TrialRules.MortalSides : sides;
-        bool random = IsRandomChannel(message.LogKind);
         bool own = NamesMatch(sender, self.Name)
-            || message.Sender.TextValue.Contains(self.Name, StringComparison.OrdinalIgnoreCase)
-            || (client.ExpectedOwnDice > 0 && (sender.Length == 0 || random));
-        if (!own || rolledSides != godSides || roll < 1 || roll > rolledSides)
+            || rawSender.Contains(self.Name, StringComparison.OrdinalIgnoreCase)
+            || full.Contains(self.Name, StringComparison.OrdinalIgnoreCase)
+            || (client.ExpectedOwnDice > 0 && sender.Length == 0);
+        if (!own || sides != godSides || roll < 1 || roll > sides)
             return;
 
         if (client.ExpectedOwnDice > 0)
@@ -167,45 +167,31 @@ internal sealed class TrialWatcher
         {
             if (payload is PlayerPayload player && name.Length == 0)
                 name = player.PlayerName;
-            if (!sawIcon)
-            {
-                if (IsDiceIcon(payload))
-                    sawIcon = true;
-                continue;
-            }
-
-            if (payload is TextPayload text)
+            if (IsDiceIcon(payload))
+                sawIcon = true;
+            if (sawIcon && payload is TextPayload text)
                 afterIcon.Append(' ').Append(text.Text);
         }
 
-        string after = afterIcon.ToString();
         string full = message.TextValue ?? "";
-        return DiceText.TryRead(full, out roll, out sides) || DiceText.TryRead(after, out roll, out sides);
+        if (DiceText.TryRead(full, out roll, out sides))
+            return true;
+        return sawIcon && DiceText.TryRead(afterIcon.ToString(), out roll, out sides);
     }
 
     private static bool IsDiceIcon(Payload payload)
     {
+        string label = payload.ToString() ?? "";
+        if (label.Equals("Icon - Dice", StringComparison.OrdinalIgnoreCase))
+            return true;
         if (payload is IconPayload icon && icon.Icon.ToString().Contains("Dice", StringComparison.OrdinalIgnoreCase))
             return true;
-        string label = payload.ToString() ?? "";
         return label.Contains("Dice", StringComparison.OrdinalIgnoreCase)
             && (payload is IconPayload || label.Contains("Icon", StringComparison.OrdinalIgnoreCase));
     }
 
-    private static bool IsRollChannel(XivChatType type)
-    {
-        string name = type.ToString();
-        return name.Contains("Party", StringComparison.OrdinalIgnoreCase)
-            || name.Contains("Alliance", StringComparison.OrdinalIgnoreCase)
-            || IsRandomChannel(type);
-    }
-
-    private static bool IsRandomChannel(XivChatType type)
-    {
-        string name = type.ToString();
-        return name.Contains("Random", StringComparison.OrdinalIgnoreCase)
-            || name.Contains("Dice", StringComparison.OrdinalIgnoreCase);
-    }
+    private static bool IsRollChannel(XivChatType type) =>
+        type.ToString().Contains("Party", StringComparison.OrdinalIgnoreCase);
 
     private static bool IsPlayer(string sender, string named, string message, string rawSender, Participant participant)
     {
@@ -223,13 +209,30 @@ internal sealed class TrialWatcher
 
     private static string FirstName(string embedded, string sender)
     {
-        string cleanSender = sender.Trim().Trim('"');
-        return embedded.Length > 0 ? embedded.Trim() : cleanSender;
+        string cleanSender = StripChatJunk(sender);
+        return embedded.Length > 0 ? StripChatJunk(embedded) : cleanSender;
+    }
+
+    private static string StripChatJunk(string? value)
+    {
+        if (string.IsNullOrEmpty(value))
+            return "";
+
+        var buffer = new StringBuilder(value.Length);
+        foreach (char ch in value.Trim().Trim('"'))
+        {
+            // Drop FFXIV private-use icon glyphs (dice marker, etc.).
+            if (ch >= '\uE000' && ch <= '\uF8FF')
+                continue;
+            buffer.Append(ch);
+        }
+
+        return buffer.ToString().Trim();
     }
 
     private static bool NamesMatch(string sender, string fullName)
     {
-        string clean = sender.Trim().Trim('"');
+        string clean = StripChatJunk(sender);
         if (clean.Length == 0 || fullName.Length == 0)
             return false;
         if (clean.Equals(fullName, StringComparison.OrdinalIgnoreCase))

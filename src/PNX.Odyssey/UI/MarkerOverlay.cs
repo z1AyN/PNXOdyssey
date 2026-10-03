@@ -174,7 +174,7 @@ internal sealed class MarkerOverlay : Window
     private static readonly TrialBadge[] Trials =
     [
         new(TrialAspect.Strength, new(0.80f, 0.00f, 0.00f, 1f), Badge.Spear),
-        new(TrialAspect.Harmony, new(0.66f, 0.27f, 1.00f, 1f), Badge.Crown),
+        new(TrialAspect.Harmony, new(0.66f, 0.27f, 1.00f, 1f), Badge.Links),
         new(TrialAspect.Fear, new(0.00f, 0.74f, 0.06f, 1f), Badge.Wave),
         new(TrialAspect.Power, new(0.98f, 0.85f, 0.32f, 1f), Badge.Bolt),
     ];
@@ -184,7 +184,7 @@ internal sealed class MarkerOverlay : Window
     private enum Badge
     {
         Spear,
-        Crown,
+        Links,
         Wave,
         Bolt,
     }
@@ -265,50 +265,53 @@ internal sealed class MarkerOverlay : Window
 
     private static void DrawBadge(ImDrawListPtr draw, Vector2 min, float size, TrialBadge trial, bool lit, float opacity)
     {
+        // Lit and unlit share the same stroke geometry — only the ink colour changes.
         Vector4 color = lit
             ? trial.Color with { W = opacity }
-            : new Vector4(0.56f, 0.56f, 0.56f, opacity);
+            : new Vector4(0.38f, 0.38f, 0.38f, opacity);
         uint ink = ImGui.GetColorU32(color);
         Vector2 center = min + new Vector2(size * 0.5f, size * 0.5f);
         float radius = size * 0.42f;
-        if (!lit)
-            draw.AddCircle(center, radius, ink, 12, 1.2f);
+        float ring = Math.Max(1.15f, size * 0.075f);
+        float stroke = Math.Max(1.25f, size * 0.085f);
+        draw.AddCircle(center, radius, ink, 16, ring);
 
         switch (trial.Shape)
         {
             case Badge.Spear:
-                Triangle(draw, center, radius, up: true, ink, lit);
+                Triangle(draw, center, radius * 0.78f, up: true, ink, stroke);
                 break;
-            case Badge.Crown:
-                draw.AddTriangleFilled(center + new Vector2(-radius, radius * 0.4f), center + new Vector2(-radius * 0.35f, -radius), center + new Vector2(0, radius * 0.15f), ink);
-                draw.AddTriangleFilled(center + new Vector2(-radius * 0.2f, radius * 0.2f), center, center + new Vector2(0, -radius), ink);
-                draw.AddTriangleFilled(center + new Vector2(0, radius * 0.15f), center + new Vector2(radius * 0.35f, -radius), center + new Vector2(radius, radius * 0.4f), ink);
+            case Badge.Links:
+                // Two interlocking rings — distinct from the other stroke icons.
+                float link = radius * 0.38f;
+                float shift = radius * 0.28f;
+                draw.AddCircle(center + new Vector2(-shift, 0), link, ink, 16, stroke);
+                draw.AddCircle(center + new Vector2(shift, 0), link, ink, 16, stroke);
                 break;
             case Badge.Wave:
-                float y1 = center.Y - radius * 0.35f;
-                float y2 = center.Y + radius * 0.35f;
-                draw.AddLine(new Vector2(center.X - radius, y1), new Vector2(center.X + radius, y1), ink, 1.4f);
-                draw.AddLine(new Vector2(center.X - radius, center.Y), new Vector2(center.X + radius, center.Y), ink, 1.4f);
-                draw.AddLine(new Vector2(center.X - radius, y2), new Vector2(center.X + radius, y2), ink, 1.4f);
+                float y1 = center.Y - (radius * 0.35f);
+                float y2 = center.Y + (radius * 0.35f);
+                float left = center.X - (radius * 0.72f);
+                float right = center.X + (radius * 0.72f);
+                draw.AddLine(new Vector2(left, y1), new Vector2(right, y1), ink, stroke);
+                draw.AddLine(new Vector2(left, center.Y), new Vector2(right, center.Y), ink, stroke);
+                draw.AddLine(new Vector2(left, y2), new Vector2(right, y2), ink, stroke);
                 break;
             default:
-                BoltScratch[0] = center + new Vector2(-radius * 0.2f, -radius);
-                BoltScratch[1] = center + new Vector2(radius * 0.55f, -radius * 0.05f);
+                BoltScratch[0] = center + new Vector2(-radius * 0.2f, -radius * 0.78f);
+                BoltScratch[1] = center + new Vector2(radius * 0.5f, -radius * 0.05f);
                 BoltScratch[2] = center + new Vector2(-radius * 0.15f, radius * 0.05f);
-                BoltScratch[3] = center + new Vector2(radius * 0.25f, radius);
-                draw.AddPolyline(ref BoltScratch[0], 4, ink, ImDrawFlags.None, 1.8f);
+                BoltScratch[3] = center + new Vector2(radius * 0.22f, radius * 0.78f);
+                draw.AddPolyline(ref BoltScratch[0], 4, ink, ImDrawFlags.None, stroke);
                 break;
         }
     }
 
-    private static void Triangle(ImDrawListPtr draw, Vector2 center, float radius, bool up, uint color, bool filled)
+    private static void Triangle(ImDrawListPtr draw, Vector2 center, float radius, bool up, uint color, float thickness)
     {
         Vector2 a = center + new Vector2(0, up ? -radius : radius);
         Vector2 b = center + new Vector2(-radius, up ? radius * 0.75f : -radius * 0.75f);
         Vector2 c = center + new Vector2(radius, up ? radius * 0.75f : -radius * 0.75f);
-        if (filled)
-            draw.AddTriangleFilled(a, b, c, color);
-        else
-            draw.AddTriangle(a, b, c, color, 1.3f);
+        draw.AddTriangle(a, b, c, color, thickness);
     }
 }

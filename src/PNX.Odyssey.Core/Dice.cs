@@ -48,23 +48,26 @@ public static partial class DiceText
         if (string.IsNullOrWhiteSpace(text))
             return false;
 
+        // Party /dice: "Random! (1-6) 2"
+        Match party = PartyDice().Match(text);
+        if (party.Success
+            && int.TryParse(party.Groups["min"].Value, NumberStyles.None, CultureInfo.InvariantCulture, out int min)
+            && int.TryParse(party.Groups["max"].Value, NumberStyles.None, CultureInfo.InvariantCulture, out sides)
+            && int.TryParse(party.Groups["roll"].Value, NumberStyles.None, CultureInfo.InvariantCulture, out roll)
+            && min >= 0
+            && sides > min
+            && roll >= min
+            && roll <= sides)
+            return true;
+
+        // Alternate wording: "rolls a 4 (out of 6)!"
         Match match = OutOf().Match(text);
-        if (match.Success
+        return match.Success
             && int.TryParse(match.Groups[1].Value, NumberStyles.None, CultureInfo.InvariantCulture, out roll)
             && int.TryParse(match.Groups[2].Value, NumberStyles.None, CultureInfo.InvariantCulture, out sides)
             && roll > 0
-            && sides > 0)
-            return true;
-
-        MatchCollection numbers = RollPattern().Matches(text);
-        if (numbers.Count == 0)
-            return false;
-
-        Match chosen = numbers.Count > 1 && numbers[0].Value == "1"
-            ? numbers[^1]
-            : numbers[0];
-        sides = 0;
-        return int.TryParse(chosen.Value, NumberStyles.None, CultureInfo.InvariantCulture, out roll) && roll > 0;
+            && sides > 0
+            && roll <= sides;
     }
 
     public static int? ReadRoll(string? text)
@@ -101,4 +104,10 @@ public static partial class DiceText
 
     [GeneratedRegex(@"(\d+)\s*\(out of\s*(\d+)", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex OutOf();
+
+    // /dice party N → "Random! (1-N) R" (hyphen may be ASCII or an en/em dash).
+    [GeneratedRegex(
+        @"Random!\s*\((?<min>\d+)\s*[-–—]\s*(?<max>\d+)\)\s*(?<roll>\d+)",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    private static partial Regex PartyDice();
 }

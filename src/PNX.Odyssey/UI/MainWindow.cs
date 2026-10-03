@@ -1,6 +1,8 @@
 using System.Numerics;
 using System.Text;
 using Dalamud.Bindings.ImGui;
+using Dalamud.Interface;
+using Dalamud.Interface.Components;
 using Dalamud.Interface.Windowing;
 using Pnx.Odyssey.Core;
 using Pnx.Odyssey.Services;
@@ -111,23 +113,48 @@ internal sealed class MainWindow : Window
 
     private void DrawHostBar(SessionSnapshot snapshot)
     {
+        ImGui.Spacing();
+        ImGui.Separator();
+        ImGui.Spacing();
+
         ImGui.AlignTextToFramePadding();
         if (ImGui.Button("Claims"))
             TellClaims(snapshot);
+        ImGui.SameLine();
+        ImGui.PushID("host-library");
+        if (ImGuiComponents.IconButtonWithText(FontAwesomeIcon.Book, "Shared Library"))
+            _plugin.OpenLibrary();
+        ImGui.PopID();
+        ImGui.SameLine();
+        ImGui.AlignTextToFramePadding();
+        ImGui.TextDisabled("|");
+
         foreach (string id in _plugin.Config.HostHotbar.ToList())
         {
             GodMacro? macro = snapshot.Macros.FirstOrDefault(item => item.Id == id);
             if (macro == null)
                 continue;
-            string label = macro.Name;
-            Ui.WrapSameLine($"{label}##host{id}");
-            if (ImGui.Button($"{label}##host{id}"))
+            string label = $"{macro.Name}##host{id}";
+            Ui.WrapSameLine(label);
+            _plugin.Config.MacroButtonColors.TryGetValue(id, out string? hex);
+            Vector4 fill = Ui.ParseColor(hex, Ui.DefaultMacroColor);
+            if (Ui.ColoredButton(label, fill))
                 _hostNote = RunLines(macro.Text) ? null : $"Could not run {macro.Name}.";
+            if (ImGui.IsItemHovered())
+                ImGui.SetTooltip("Left-click to run. Right-click to change colour.");
+            if (ImGui.IsItemClicked(ImGuiMouseButton.Right))
+                ImGui.OpenPopup($"##host-color-{id}");
+            if (Ui.MacroColorPopup($"##host-color-{id}", ref fill))
+            {
+                _plugin.Config.MacroButtonColors[id] = Ui.FormatColor(fill);
+                _plugin.Config.Save();
+            }
         }
 
-        Ui.WrapSameLine("Shared Library##host");
-        if (ImGui.Button("Shared Library##host"))
-            _plugin.OpenLibrary();
+        ImGui.Spacing();
+        ImGui.Separator();
+        ImGui.Spacing();
+
         if (_hostNote != null)
             ImGui.TextColored(Ui.Amber, _hostNote);
     }

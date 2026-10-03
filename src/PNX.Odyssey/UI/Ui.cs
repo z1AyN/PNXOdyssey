@@ -314,15 +314,97 @@ internal static class Ui
         pushed?.Dispose();
     }
 
+    public static float ButtonWidth(string label)
+    {
+        string visible = label;
+        int hash = label.IndexOf("##", StringComparison.Ordinal);
+        if (hash >= 0)
+            visible = label[..hash];
+        Vector2 pad = ImGui.GetStyle().FramePadding;
+        return ImGui.CalcTextSize(visible).X + (pad.X * 2f);
+    }
+
+    /// <summary>Continue on the previous line when <paramref name="label"/> fits; otherwise start a new row.</summary>
     public static void WrapSameLine(string label, float reserve = 0f)
     {
-        Vector2 pad = ImGui.GetStyle().FramePadding;
-        float width = ImGui.CalcTextSize(label).X + (pad.X * 2f);
+        float width = ButtonWidth(label);
         float spacing = ImGui.GetStyle().ItemSpacing.X;
-        if (ImGui.GetCursorPosX() > ImGui.GetWindowContentRegionMin().X
-            && width + spacing + reserve > ImGui.GetContentRegionAvail().X)
-            return;
-        ImGui.SameLine();
+        float right = ImGui.GetWindowPos().X + ImGui.GetContentRegionMax().X;
+        if (ImGui.GetItemRectMax().X + spacing + width + reserve < right)
+            ImGui.SameLine();
+    }
+
+    public static Vector4 DefaultMacroColor { get; } = new(0.196f, 0.196f, 0.196f, 1f);
+
+    public static Vector4 ParseColor(string? hex, Vector4 fallback)
+    {
+        if (string.IsNullOrWhiteSpace(hex))
+            return fallback;
+        string value = hex.Trim();
+        if (value.StartsWith('#') || value.StartsWith("0x", StringComparison.OrdinalIgnoreCase))
+            value = value.StartsWith('#') ? value[1..] : value[2..];
+        if (value.Length is not (6 or 8))
+            return fallback;
+        if (!uint.TryParse(value, System.Globalization.NumberStyles.HexNumber, null, out uint packed))
+            return fallback;
+        if (value.Length == 6)
+            packed = (packed << 8) | 0xFFu;
+        return new Vector4(
+            ((packed >> 24) & 0xFF) / 255f,
+            ((packed >> 16) & 0xFF) / 255f,
+            ((packed >> 8) & 0xFF) / 255f,
+            (packed & 0xFF) / 255f);
+    }
+
+    public static string FormatColor(Vector4 color)
+    {
+        int r = Math.Clamp((int)MathF.Round(color.X * 255f), 0, 255);
+        int g = Math.Clamp((int)MathF.Round(color.Y * 255f), 0, 255);
+        int b = Math.Clamp((int)MathF.Round(color.Z * 255f), 0, 255);
+        return $"#{r:X2}{g:X2}{b:X2}";
+    }
+
+    public static bool ColoredButton(string label, Vector4 fill, Vector2? size = null)
+    {
+        Vector4 hover = fill with
+        {
+            X = Math.Min(1f, fill.X + 0.08f),
+            Y = Math.Min(1f, fill.Y + 0.08f),
+            Z = Math.Min(1f, fill.Z + 0.08f),
+        };
+        Vector4 active = fill with
+        {
+            X = Math.Min(1f, fill.X + 0.14f),
+            Y = Math.Min(1f, fill.Y + 0.14f),
+            Z = Math.Min(1f, fill.Z + 0.14f),
+        };
+        float luma = (fill.X * 0.2126f) + (fill.Y * 0.7152f) + (fill.Z * 0.0722f);
+        Vector4 ink = luma > 0.55f ? new Vector4(0.08f, 0.07f, 0.10f, 1f) : Text;
+        ImGui.PushStyleColor(ImGuiCol.Button, fill);
+        ImGui.PushStyleColor(ImGuiCol.ButtonHovered, hover);
+        ImGui.PushStyleColor(ImGuiCol.ButtonActive, active);
+        ImGui.PushStyleColor(ImGuiCol.Text, ink);
+        bool pressed = size is { } fixedSize ? ImGui.Button(label, fixedSize) : ImGui.Button(label);
+        ImGui.PopStyleColor(4);
+        return pressed;
+    }
+
+    public static bool MacroColorPopup(string popupId, ref Vector4 color)
+    {
+        if (!ImGui.BeginPopup(popupId))
+            return false;
+        bool changed = ImGui.ColorEdit4(
+            "##macro-color",
+            ref color,
+            ImGuiColorEditFlags.NoAlpha | ImGuiColorEditFlags.NoInputs | ImGuiColorEditFlags.PickerHueWheel);
+        if (ImGui.Button("Reset"))
+        {
+            color = DefaultMacroColor;
+            changed = true;
+        }
+
+        ImGui.EndPopup();
+        return changed;
     }
 
     public static void DiceTable(

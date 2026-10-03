@@ -55,6 +55,9 @@ public sealed class Configuration : IPluginConfiguration
 
     public List<string> HostHotbar { get; set; } = [];
 
+    /// <summary>Per-macro hotbar button colours as #RRGGBB, keyed by macro id.</summary>
+    public Dictionary<string, string> MacroButtonColors { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+
     public Dictionary<string, List<VenuePerson>> VenueSeen { get; set; } = new(StringComparer.OrdinalIgnoreCase);
 
     public Dictionary<string, List<VenueTouch>> VenueDice { get; set; } = new(StringComparer.OrdinalIgnoreCase);
@@ -92,6 +95,7 @@ public sealed class Configuration : IPluginConfiguration
         Macros ??= [];
         GodHotbar ??= [];
         HostHotbar ??= [];
+        MacroButtonColors ??= new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         VenueSeen ??= new Dictionary<string, List<VenuePerson>>(StringComparer.OrdinalIgnoreCase);
         VenueDice ??= new Dictionary<string, List<VenueTouch>>(StringComparer.OrdinalIgnoreCase);
         if (!EventMacrosReady)

@@ -22,6 +22,7 @@ public class DiceTests
     }
 
     [Theory]
+    [InlineData("Random! (1-6) 2", 2)]
     [InlineData("rolls a 4 (out of 6)!", 4)]
     [InlineData("1 5", 5)]
     [InlineData("11", 11)]
@@ -32,6 +33,9 @@ public class DiceTests
     }
 
     [Theory]
+    [InlineData("Random! (1-6) 2", 2, 6)]
+    [InlineData("Random! (1-8) 7", 7, 8)]
+    [InlineData("random! (1–6) 4", 4, 6)]
     [InlineData("rolls a 4 (out of 6)!", 4, 6)]
     [InlineData("rolls a 4 (out of 100)!", 4, 100)]
     [InlineData("rolls a 7 (out of 8)!", 7, 8)]
@@ -42,12 +46,16 @@ public class DiceTests
         Assert.Equal(sides, readSides);
     }
 
-    [Fact]
-    public void A_roll_without_a_die_size_is_unspecified()
+    [Theory]
+    [InlineData("rolls a 4!")]
+    [InlineData("5")]
+    [InlineData("need 3 threads")]
+    [InlineData("1 5")]
+    [InlineData("(1-6) 2")]
+    [InlineData("Random! please help")]
+    public void Bare_numbers_are_not_dice_rolls(string text)
     {
-        Assert.True(DiceText.TryRead("rolls a 4!", out int roll, out int sides));
-        Assert.Equal(4, roll);
-        Assert.Equal(0, sides);
+        Assert.False(DiceText.TryRead(text, out _, out _));
     }
 
     [Fact]

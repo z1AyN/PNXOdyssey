@@ -1,5 +1,7 @@
 using System.Numerics;
 using Dalamud.Bindings.ImGui;
+using Dalamud.Interface;
+using Dalamud.Interface.Components;
 using Pnx.Odyssey.Core;
 using Pnx.Odyssey.Services;
 
@@ -224,22 +226,44 @@ internal sealed class GodForm
 
     private void DrawMacroBar(Plugin plugin, SessionSnapshot snapshot)
     {
+        ImGui.Spacing();
+        ImGui.Separator();
+        ImGui.Spacing();
+
         ImGui.AlignTextToFramePadding();
         ImGui.Text("Macros");
+        ImGui.SameLine();
+        if (ImGuiComponents.IconButtonWithText(FontAwesomeIcon.Book, "Shared Library"))
+            plugin.OpenLibrary();
+        ImGui.SameLine();
+        ImGui.AlignTextToFramePadding();
+        ImGui.TextDisabled("|");
+
         foreach (string id in plugin.Config.GodHotbar.ToList())
         {
             GodMacro? macro = snapshot.Macros.FirstOrDefault(item => item.Id == id);
             if (macro == null)
                 continue;
-            string label = macro.Name;
-            Ui.WrapSameLine($"{label}##hot{id}");
-            if (ImGui.Button($"{label}##hot{id}"))
+            string label = $"{macro.Name}##hot{id}";
+            Ui.WrapSameLine(label);
+            plugin.Config.MacroButtonColors.TryGetValue(id, out string? hex);
+            Vector4 fill = Ui.ParseColor(hex, Ui.DefaultMacroColor);
+            if (Ui.ColoredButton(label, fill))
                 RunShared(plugin, macro);
+            if (ImGui.IsItemHovered())
+                ImGui.SetTooltip("Left-click to run. Right-click to change colour.");
+            if (ImGui.IsItemClicked(ImGuiMouseButton.Right))
+                ImGui.OpenPopup($"##macro-color-{id}");
+            if (Ui.MacroColorPopup($"##macro-color-{id}", ref fill))
+            {
+                plugin.Config.MacroButtonColors[id] = Ui.FormatColor(fill);
+                plugin.Config.Save();
+            }
         }
 
-        Ui.WrapSameLine("Shared Library");
-        if (ImGui.Button("Shared Library"))
-            plugin.OpenLibrary();
+        ImGui.Spacing();
+        ImGui.Separator();
+        ImGui.Spacing();
     }
 
     private void RunShared(Plugin plugin, GodMacro macro)
