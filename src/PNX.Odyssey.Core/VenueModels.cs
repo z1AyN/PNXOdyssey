@@ -1,4 +1,4 @@
-namespace Pnx.Odyssey;
+namespace Pnx.Odyssey.Core;
 
 public sealed class VenuePerson
 {

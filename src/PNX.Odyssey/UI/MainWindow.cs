@@ -19,6 +19,7 @@ internal sealed class MainWindow : Window
     private readonly AspectsForm _aspects = new();
     private readonly MacrosForm _macros = new();
     private readonly WatcherForm _watcher = new();
+    private readonly StatsForm _stats = new();
     private string? _hostNote;
 
     public MainWindow(Plugin plugin) : base("PNX Odyssey##main", ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoScrollWithMouse)
@@ -93,6 +94,12 @@ internal sealed class MainWindow : Window
             if (ImGui.BeginTabItem("Watcher"))
             {
                 _watcher.Draw(_plugin);
+                ImGui.EndTabItem();
+            }
+
+            if (ImGui.BeginTabItem("Statistics"))
+            {
+                _stats.Draw(_plugin);
                 ImGui.EndTabItem();
             }
 
@@ -259,6 +266,12 @@ internal sealed class MainWindow : Window
             ImGui.EndTabItem();
         }
 
+        if (ImGui.BeginTabItem("Statistics"))
+        {
+            _stats.Draw(_plugin);
+            ImGui.EndTabItem();
+        }
+
         ImGui.EndTabBar();
         return scope;
     }
@@ -284,6 +297,12 @@ internal sealed class MainWindow : Window
         if (ImGui.BeginTabItem("Watcher"))
         {
             _watcher.Draw(_plugin);
+            ImGui.EndTabItem();
+        }
+
+        if (ImGui.BeginTabItem("Statistics"))
+        {
+            _stats.Draw(_plugin);
             ImGui.EndTabItem();
         }
 
